@@ -1,0 +1,159 @@
+Crée une application web/mobile responsive appelée “CleanPath” destinée aux personnes qui souhaitent arrêter ou réduire leur consommation de drogue, dans un esprit bienveillant, non culpabilisant et confidentiel.
+
+L’application doit être en français, avec une interface moderne, calme, rassurante et minimaliste. Utilise des couleurs douces, un design clair, des cartes arrondies, une navigation simple et une expérience adaptée aux personnes anxieuses ou en période de sevrage.
+
+Fonctions principales :
+
+1. Tableau de bord
+- Afficher un message d’encouragement quotidien.
+- Afficher le nombre de jours d’abstinence.
+- Afficher le mois en cours avec les jours cochés comme “abstinent”, “consommation”, “envie forte mais pas consommé”, ou “non renseigné”.
+- Afficher une progression mensuelle en pourcentage.
+- Afficher les économies estimées si l’utilisateur encode le coût moyen de sa consommation.
+- Afficher une citation motivante ou une pensée de pleine conscience.
+
+2. Compteur d’abstinence
+Proposer deux modes :
+- Mode 1 : l’utilisateur entre une date de début d’abstinence et l’application calcule automatiquement le nombre de jours, semaines et mois.
+- Mode 2 : calendrier mensuel avec cases à cocher chaque jour.
+Le compteur doit pouvoir être réinitialisé sans effacer l’historique, afin que les rechutes soient vues comme des événements d’apprentissage et non comme des échecs.
+
+3. Journal de consommation
+Créer un journal privé où l’utilisateur peut noter :
+- Date et heure.
+- Substance consommée.
+- Quantité approximative.
+- Contexte : seul, avec des amis, stress, fête, ennui, conflit, fatigue, etc.
+- Émotion avant consommation.
+- Émotion après consommation.
+- Déclencheur principal.
+- Niveau d’envie de 1 à 10.
+- Commentaire libre.
+Ajouter aussi une entrée “j’ai eu envie mais je n’ai pas consommé”, pour valoriser les victoires invisibles.
+
+4. Journal émotionnel quotidien
+Chaque jour, l’utilisateur peut noter :
+- Humeur générale de 1 à 10.
+- Niveau d’anxiété.
+- Qualité du sommeil.
+- Énergie.
+- Gratitude du jour.
+- Ce qui a aidé aujourd’hui.
+- Ce qui a été difficile.
+- Une intention pour demain.
+
+5. Gestion des envies/cravings
+Créer un bouton d’urgence “J’ai une envie forte”.
+Quand l’utilisateur clique dessus, afficher une page de soutien immédiat avec :
+- Un minuteur de 10 minutes pour laisser passer l’envie.
+- Des exercices de respiration guidée.
+- Une liste d’actions rapides : boire de l’eau, marcher 5 minutes, appeler quelqu’un, prendre une douche, écouter une musique calme, écrire ce que je ressens.
+- Un champ “ce que je ressens maintenant”.
+- Un bouton “j’ai tenu bon” qui enregistre une victoire dans l’historique.
+- Un bouton “j’ai consommé” qui ouvre le journal sans culpabilisation.
+
+6. Plan de sécurité personnel
+Créer une section où l’utilisateur peut remplir :
+- Mes raisons d’arrêter.
+- Ce que je risque si je continue.
+- Ce que je gagne si j’arrête.
+- Mes déclencheurs principaux.
+- Mes stratégies quand j’ai envie.
+- Les personnes que je peux contacter.
+- Les lieux à éviter.
+- Les phrases qui m’aident.
+- Les activités qui m’apaisent.
+
+7. Contacts d’aide
+Permettre à l’utilisateur d’ajouter des contacts de confiance :
+- Nom.
+- Téléphone.
+- Relation.
+- Bouton rapide “appeler”.
+Ajouter aussi une section pour les numéros d’aide locaux, modifiables par l’utilisateur.
+Inclure un avertissement : “Cette application ne remplace pas un médecin, un psychologue ou un service d’urgence.”
+
+8. Objectifs et récompenses
+Créer des objectifs personnalisés :
+- 1 jour.
+- 3 jours.
+- 7 jours.
+- 14 jours.
+- 30 jours.
+- 60 jours.
+- 90 jours.
+- Objectif personnalisé.
+À chaque objectif atteint, afficher une animation douce et un message positif.
+Permettre à l’utilisateur de définir une récompense saine : cinéma, restaurant, livre, vêtement, retraite, activité spirituelle, sortie nature, etc.
+
+9. Statistiques
+Créer une page statistiques avec :
+- Nombre total de jours abstinents.
+- Meilleure série d’abstinence.
+- Série actuelle.
+- Nombre de consommations ce mois-ci.
+- Nombre d’envies surmontées.
+- Déclencheurs les plus fréquents.
+- Émotions les plus associées aux envies.
+- Graphique simple de l’humeur et des envies dans le temps.
+Les statistiques doivent être formulées avec bienveillance.
+
+10. Mode rechute sans culpabilité
+Si l’utilisateur indique une consommation, afficher un message comme :
+“Une rechute ne détruit pas ton chemin. Elle donne une information. Que peux-tu apprendre de ce moment ?”
+Puis proposer :
+- Qu’est-ce qui a déclenché la rechute ?
+- Qu’aurais-je pu faire différemment ?
+- De quoi ai-je besoin maintenant ?
+- Qui puis-je contacter ?
+- Redémarrer le compteur ou continuer avec annotation.
+
+11. Rappels
+Ajouter des rappels configurables :
+- Remplir le journal du soir.
+- Boire de l’eau.
+- Méditer.
+- Appeler une personne de confiance.
+- Aller dormir.
+- Prendre rendez-vous avec un professionnel.
+- Participer à une réunion ou un groupe de soutien.
+
+12. Confidentialité
+L’application doit être très sécurisée :
+- Ajouter un code PIN local pour ouvrir l’application.
+- Prévoir une option “mode discret” avec un nom neutre de l’application.
+- Ne jamais afficher de termes explicites sur l’écran d’accueil si le mode discret est activé.
+- Stocker les données localement dans un premier temps.
+- Prévoir une architecture permettant plus tard un compte utilisateur sécurisé.
+- Ajouter un bouton d’export des données en PDF ou CSV pour les partager avec un thérapeute, médecin ou addictologue.
+
+13. Dimension bien-être
+Ajouter une section “boîte à outils” avec :
+- Exercices de respiration.
+- Méditation courte de 3 minutes.
+- Méditation de compassion envers soi-même.
+- Liste d’activités alternatives.
+- Messages d’encouragement.
+- Espace de gratitude.
+- Liste “ce que je peux faire au lieu de consommer”.
+
+14. Interface
+Créer les pages suivantes :
+- Accueil / tableau de bord.
+- Calendrier d’abstinence.
+- Journal de consommation.
+- Journal émotionnel.
+- Bouton urgence craving.
+- Statistiques.
+- Plan de sécurité.
+- Contacts d’aide.
+- Objectifs.
+- Paramètres.
+
+15. Ton général
+Le ton doit être humain, doux, non moralisateur et encourageant.
+Ne jamais utiliser de langage culpabilisant.
+Remplacer “échec” par “information”, “apprentissage” ou “moment difficile”.
+L’application doit aider l’utilisateur à reprendre du pouvoir sur sa vie, jour après jour.
+
+Développe une première version fonctionnelle avec une base de données locale, une interface responsive, des exemples de données fictives, et un code propre facile à étendre.
