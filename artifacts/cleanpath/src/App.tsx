@@ -4,6 +4,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PinLock } from "@/components/PinLock";
+import { WelcomeScreen } from "@/components/WelcomeScreen";
+import { UserProvider, useUser } from "@/store/UserContext";
 import NotFound from "@/pages/not-found";
 
 import Home from "@/pages/Home";
@@ -41,15 +43,29 @@ function Router() {
   );
 }
 
+function AppContent() {
+  const { currentUser } = useUser();
+
+  if (!currentUser) {
+    return <WelcomeScreen />;
+  }
+
+  return (
+    <PinLock key={currentUser}>
+      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <Router />
+      </WouterRouter>
+    </PinLock>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <PinLock>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
-          </WouterRouter>
-        </PinLock>
+        <UserProvider>
+          <AppContent />
+        </UserProvider>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

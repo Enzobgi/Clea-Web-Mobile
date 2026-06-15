@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { useAppStore } from "@/store/useAppStore";
+import { useUser } from "@/store/UserContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -63,8 +63,6 @@ function MiniCalendar() {
     }
   };
 
-  const abstinentCount = days.filter(d => !d || getDayStatus(d) === "abstinent" || (!dayEntries.find(e => e.date === format(d, "yyyy-MM-dd")) && !consumptions.some(c => c.date === format(d, "yyyy-MM-dd") && c.type === "consommation") && d <= today)).length;
-
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-7 gap-1 text-center">
@@ -105,6 +103,8 @@ function MiniCalendar() {
 
 export default function Home() {
   const { sessions, settings, emotions } = useAppStore();
+  const { currentUser } = useUser();
+
   const currentSession = sessions.find(s => !s.endDate);
   const daysAbstinent = currentSession
     ? differenceInDays(new Date(), new Date(currentSession.startDate))
@@ -112,6 +112,8 @@ export default function Home() {
   const savings = daysAbstinent * settings.costPerDay;
   const hour = new Date().getHours();
   const greeting = hour < 5 ? "Bonne nuit" : hour < 12 ? "Bonjour" : hour < 18 ? "Bon après-midi" : "Bonsoir";
+  const firstName = currentUser ?? "";
+  const greetingWithName = firstName ? `${greeting}, ${firstName}.` : `${greeting}.`;
   const quote = QUOTES[new Date().getDate() % QUOTES.length];
 
   const recentMood = emotions.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.mood;
@@ -122,7 +124,7 @@ export default function Home() {
     <div className="max-w-2xl mx-auto space-y-5 animate-in fade-in duration-500 pb-8">
       <header className="space-y-0.5 pt-2">
         <p className="text-sm text-muted-foreground capitalize">{today}</p>
-        <h1 className="text-3xl font-light text-foreground">{greeting}.</h1>
+        <h1 className="text-3xl font-light text-foreground">{greetingWithName}</h1>
       </header>
 
       <Card className="bg-primary border-none">

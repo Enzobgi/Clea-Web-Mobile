@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAppStore } from "@/store/useAppStore";
+import { useUser } from "@/store/UserContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -16,9 +17,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { LogOut, UserCircle2 } from "lucide-react";
 
 export default function SettingsPage() {
-  const { settings, setSettings } = useAppStore();
+  const { settings, setSettings, prefix } = useAppStore();
+  const { currentUser, users, switchUser, deleteUser } = useUser();
   const [pinInput, setPinInput] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
   const [pinError, setPinError] = useState("");
@@ -54,32 +57,26 @@ export default function SettingsPage() {
 
   const handleExport = () => {
     const data: Record<string, unknown> = {};
-    const keys = [
-      "cleanpath_sessions", "cleanpath_dayEntries", "cleanpath_consumptions",
-      "cleanpath_emotions", "cleanpath_cravings", "cleanpath_safetyPlan",
-      "cleanpath_contacts", "cleanpath_goals", "cleanpath_settings"
-    ];
-    keys.forEach(k => {
-      try { data[k] = JSON.parse(localStorage.getItem(k) || "null"); } catch { data[k] = null; }
+    const suffixes = ["_sessions", "_dayEntries", "_consumptions", "_emotions", "_cravings", "_safetyPlan", "_contacts", "_goals", "_settings"];
+    suffixes.forEach(s => {
+      const key = `${prefix}${s}`;
+      try { data[key] = JSON.parse(localStorage.getItem(key) || "null"); } catch { data[key] = null; }
     });
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `cleanpath-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `cleanpath-${currentUser?.toLowerCase() ?? "export"}-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const handleReset = () => {
-    const keys = [
-      "cleanpath_sessions", "cleanpath_dayEntries", "cleanpath_consumptions",
-      "cleanpath_emotions", "cleanpath_cravings", "cleanpath_safetyPlan",
-      "cleanpath_contacts", "cleanpath_goals", "cleanpath_settings"
-    ];
-    keys.forEach(k => localStorage.removeItem(k));
-    window.location.reload();
+    if (!currentUser) return;
+    deleteUser(currentUser);
   };
+
+  const otherUsers = users.filter(u => u !== currentUser);
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-500 pb-12">
@@ -88,6 +85,58 @@ export default function SettingsPage() {
         <p className="text-muted-foreground">Personnalise ton expérience.</p>
       </header>
 
+      {/* Profil actif */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Mon profil</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40">
+            <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center">
+              <span className="text-primary font-medium text-lg">
+                {currentUser?.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div>
+              <p className="font-medium text-foreground">{currentUser}</p>
+              <p className="text-xs text-muted-foreground">Profil actif</p>
+            </div>
+          </div>
+
+          {otherUsers.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground font-medium">Autres profils sur cet appareil</p>
+              {otherUsers.map(u => (
+                <button
+                  key={u}
+                  onClick={() => switchUser(u)}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-accent transition-colors text-left"
+                >
+                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                    <span className="text-sm font-medium">{u.charAt(0).toUpperCase()}</span>
+                  </div>
+                  <span className="text-sm text-foreground">{u}</span>
+                  <LogOut className="ml-auto h-4 w-4 text-muted-foreground" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              localStorage.removeItem("cleanpath_current_user");
+              window.location.reload();
+            }}
+          >
+            <UserCircle2 className="mr-2 h-4 w-4" />
+            Créer ou changer de profil
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Confidentialité */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Confidentialité</CardTitle>
@@ -153,6 +202,7 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Économies */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Économies</CardTitle>
@@ -173,6 +223,7 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Données */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Données</CardTitle>
@@ -188,12 +239,12 @@ export default function SettingsPage() {
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" className="w-full" data-testid="button-reset-data">
-                Effacer toutes mes données
+                Supprimer mon profil et mes données
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Effacer toutes les données ?</AlertDialogTitle>
+                <AlertDialogTitle>Supprimer le profil "{currentUser}" ?</AlertDialogTitle>
                 <AlertDialogDescription>
                   Cette action supprimera définitivement toutes tes entrées, ton journal, ton historique et tes paramètres. Cette action est irréversible.
                 </AlertDialogDescription>
@@ -201,7 +252,7 @@ export default function SettingsPage() {
               <AlertDialogFooter>
                 <AlertDialogCancel>Annuler</AlertDialogCancel>
                 <AlertDialogAction onClick={handleReset} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Effacer définitivement
+                  Supprimer définitivement
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

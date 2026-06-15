@@ -1,5 +1,5 @@
 import { useLocalStorage } from "./use-local-storage";
-import { subDays, format } from "date-fns";
+import { useUser, getUserStoragePrefix } from "./UserContext";
 
 export type DayStatus = "abstinent" | "consommation" | "envie_forte" | "non_renseigne";
 
@@ -83,12 +83,6 @@ export interface AppSettings {
   reminderSettings: { [key: string]: boolean };
 }
 
-const defaultStartDate = subDays(new Date(), 12).toISOString();
-
-const defaultSessions: AbstractionSession[] = [
-  { id: "1", startDate: defaultStartDate, endDate: null, note: "" }
-];
-
 const defaultSettings: AppSettings = {
   pin: null,
   discreteMode: false,
@@ -97,41 +91,40 @@ const defaultSettings: AppSettings = {
 };
 
 const defaultSafetyPlan: SafetyPlan = {
-  reasons: "Retrouver ma liberté, améliorer ma santé.",
-  risks: "Perte de contrôle, isolement.",
-  gains: "Plus d'énergie, meilleure humeur.",
-  triggers: "Stress au travail, ennui le soir.",
-  strategies: "Aller marcher, appeler un ami, respirer.",
+  reasons: "",
+  risks: "",
+  gains: "",
+  triggers: "",
+  strategies: "",
   contacts: "",
-  placesToAvoid: "Bars du centre-ville",
+  placesToAvoid: "",
   helpfulPhrases: "Cette envie va passer.",
-  calmingActivities: "Écouter de la musique douce, prendre un bain chaud."
+  calmingActivities: ""
 };
 
 const defaultGoals: Goal[] = [
-  { days: 1, reward: "Un bon repas", achievedDate: subDays(new Date(), 11).toISOString() },
-  { days: 3, reward: "Un film sans culpabilité", achievedDate: subDays(new Date(), 9).toISOString() },
-  { days: 7, reward: "Un petit cadeau", achievedDate: subDays(new Date(), 5).toISOString() },
-  { days: 14, reward: "Un livre", achievedDate: null },
-  { days: 30, reward: "Un massage", achievedDate: null },
-];
-
-const defaultContacts: TrustedContact[] = [
-  { id: "1", name: "Sophie (Sœur)", phone: "0612345678", relationship: "Sœur" },
+  { days: 1, reward: "", achievedDate: null },
+  { days: 7, reward: "", achievedDate: null },
+  { days: 30, reward: "", achievedDate: null },
+  { days: 90, reward: "", achievedDate: null },
 ];
 
 export function useAppStore() {
-  const [sessions, setSessions] = useLocalStorage<AbstractionSession[]>("cleanpath_sessions", defaultSessions);
-  const [dayEntries, setDayEntries] = useLocalStorage<DayEntry[]>("cleanpath_dayEntries", []);
-  const [consumptions, setConsumptions] = useLocalStorage<ConsumptionEntry[]>("cleanpath_consumptions", []);
-  const [emotions, setEmotions] = useLocalStorage<EmotionalEntry[]>("cleanpath_emotions", []);
-  const [cravings, setCravings] = useLocalStorage<CravingEvent[]>("cleanpath_cravings", []);
-  const [safetyPlan, setSafetyPlan] = useLocalStorage<SafetyPlan>("cleanpath_safetyPlan", defaultSafetyPlan);
-  const [contacts, setContacts] = useLocalStorage<TrustedContact[]>("cleanpath_contacts", defaultContacts);
-  const [goals, setGoals] = useLocalStorage<Goal[]>("cleanpath_goals", defaultGoals);
-  const [settings, setSettings] = useLocalStorage<AppSettings>("cleanpath_settings", defaultSettings);
+  const { currentUser } = useUser();
+  const prefix = currentUser ? getUserStoragePrefix(currentUser) : "cleanpath_guest";
+
+  const [sessions, setSessions] = useLocalStorage<AbstractionSession[]>(`${prefix}_sessions`, []);
+  const [dayEntries, setDayEntries] = useLocalStorage<DayEntry[]>(`${prefix}_dayEntries`, []);
+  const [consumptions, setConsumptions] = useLocalStorage<ConsumptionEntry[]>(`${prefix}_consumptions`, []);
+  const [emotions, setEmotions] = useLocalStorage<EmotionalEntry[]>(`${prefix}_emotions`, []);
+  const [cravings, setCravings] = useLocalStorage<CravingEvent[]>(`${prefix}_cravings`, []);
+  const [safetyPlan, setSafetyPlan] = useLocalStorage<SafetyPlan>(`${prefix}_safetyPlan`, defaultSafetyPlan);
+  const [contacts, setContacts] = useLocalStorage<TrustedContact[]>(`${prefix}_contacts`, []);
+  const [goals, setGoals] = useLocalStorage<Goal[]>(`${prefix}_goals`, defaultGoals);
+  const [settings, setSettings] = useLocalStorage<AppSettings>(`${prefix}_settings`, defaultSettings);
 
   return {
+    prefix,
     sessions, setSessions,
     dayEntries, setDayEntries,
     consumptions, setConsumptions,
