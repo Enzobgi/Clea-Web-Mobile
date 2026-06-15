@@ -1,23 +1,22 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useVault } from "@/store/VaultContext";
 import { useAppStore } from "@/store/useAppStore";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Button } from "@/components/ui/button";
 
 export function PinLock({ children }: { children: React.ReactNode }) {
+  const { vaultPresent, isUnlocked, unlock } = useVault();
   const { settings } = useAppStore();
-  const [isLocked, setIsLocked] = useState(false);
   const [pin, setPin] = useState("");
   const [error, setError] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (settings.pin) {
-      setIsLocked(true);
-    }
-  }, [settings.pin]);
-
-  const handleVerify = () => {
-    if (pin === settings.pin) {
-      setIsLocked(false);
+  const handleVerify = async () => {
+    if (pin.length !== 4) return;
+    setBusy(true);
+    const ok = await unlock(pin);
+    setBusy(false);
+    if (ok) {
       setError(false);
     } else {
       setError(true);
@@ -25,7 +24,7 @@ export function PinLock({ children }: { children: React.ReactNode }) {
     }
   };
 
-  if (!isLocked) return <>{children}</>;
+  if (!vaultPresent || isUnlocked) return <>{children}</>;
 
   return (
     <div className="min-h-[100dvh] flex flex-col items-center justify-center p-4 bg-background">
@@ -46,11 +45,11 @@ export function PinLock({ children }: { children: React.ReactNode }) {
               <InputOTPSlot index={3} className="w-14 h-14 text-2xl" />
             </InputOTPGroup>
           </InputOTP>
-          
+
           {error && <p className="text-destructive text-sm">Code incorrect, veuillez réessayer.</p>}
-          
-          <Button onClick={handleVerify} disabled={pin.length !== 4} className="w-full max-w-xs">
-            Déverrouiller
+
+          <Button onClick={handleVerify} disabled={pin.length !== 4 || busy} className="w-full max-w-xs">
+            {busy ? "Vérification…" : "Déverrouiller"}
           </Button>
         </div>
       </div>

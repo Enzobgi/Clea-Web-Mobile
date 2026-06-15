@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useAppStore } from "@/store/useAppStore";
 import { useUser } from "@/store/UserContext";
+import { useVault } from "@/store/VaultContext";
+import { destroyVault } from "@/store/vault";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -22,16 +24,18 @@ import { LogOut, UserCircle2 } from "lucide-react";
 export default function SettingsPage() {
   const { settings, setSettings, prefix } = useAppStore();
   const { currentUser, users, switchUser, deleteUser } = useUser();
+  const { vaultPresent, enableVault, disableVault, vaultData } = useVault();
   const [pinInput, setPinInput] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
   const [pinError, setPinError] = useState("");
   const [pinSaved, setPinSaved] = useState(false);
+  const [pinBusy, setPinBusy] = useState(false);
 
   useEffect(() => {
     document.title = settings.discreteMode ? "Journal" : "CleanPath";
   }, [settings.discreteMode]);
 
-  const handleSavePin = () => {
+  const handleSavePin = async () => {
     if (pinInput.length !== 4 || !/^\d{4}$/.test(pinInput)) {
       setPinError("Le code PIN doit être composé de 4 chiffres.");
       return;
@@ -40,16 +44,21 @@ export default function SettingsPage() {
       setPinError("Les codes PIN ne correspondent pas.");
       return;
     }
-    setSettings({ ...settings, pin: pinInput });
-    setPinInput("");
-    setPinConfirm("");
-    setPinError("");
-    setPinSaved(true);
-    setTimeout(() => setPinSaved(false), 3000);
+    setPinBusy(true);
+    try {
+      await enableVault(pinInput);
+      setPinInput("");
+      setPinConfirm("");
+      setPinError("");
+      setPinSaved(true);
+      setTimeout(() => setPinSaved(false), 3000);
+    } finally {
+      setPinBusy(false);
+    }
   };
 
   const handleRemovePin = () => {
-    setSettings({ ...settings, pin: null });
+    disableVault();
     setPinInput("");
     setPinConfirm("");
     setPinSaved(false);
@@ -57,11 +66,24 @@ export default function SettingsPage() {
 
   const handleExport = () => {
     const data: Record<string, unknown> = {};
-    const suffixes = ["_sessions", "_dayEntries", "_consumptions", "_emotions", "_cravings", "_safetyPlan", "_contacts", "_goals", "_settings"];
-    suffixes.forEach(s => {
-      const key = `${prefix}${s}`;
-      try { data[key] = JSON.parse(localStorage.getItem(key) || "null"); } catch { data[key] = null; }
-    });
+    const suffixes = ["_sessions", "_dayEntries", "_consumptions", "_emotions", "_cravings", "_safetyPlan", "_contacts", "_goals"];
+
+    if (vaultPresent && vaultData) {
+      suffixes.forEach(s => { data[`${prefix}${s}`] = vaultData[`${prefix}${s}`] ?? null; });
+    } else {
+      suffixes.forEach(s => {
+        const key = `${prefix}${s}`;
+        try { data[key] = JSON.parse(localStorage.getItem(key) || "null"); } catch { data[key] = null; }
+      });
+    }
+
+    try {
+      const raw = localStorage.getItem(`${prefix}_settings`);
+      data[`${prefix}_settings`] = raw ? JSON.parse(raw) : null;
+    } catch {
+      data[`${prefix}_settings`] = null;
+    }
+
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -73,6 +95,7 @@ export default function SettingsPage() {
 
   const handleReset = () => {
     if (!currentUser) return;
+    destroyVault(prefix);
     deleteUser(currentUser);
   };
 
@@ -156,9 +179,9 @@ export default function SettingsPage() {
 
           <div className="space-y-3 pt-2 border-t border-border">
             <Label className="text-base">Code PIN</Label>
-            {settings.pin ? (
+            {vaultPresent ? (
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">Un code PIN est actif. L'application le demande à l'ouverture.</p>
+                <p className="text-sm text-muted-foreground">Un code PIN est actif. Les données du journal sont chiffrées sur cet appareil.</p>
                 <Button variant="outline" size="sm" onClick={handleRemovePin} data-testid="button-remove-pin">
                   Supprimer le code PIN
                 </Button>
@@ -192,9 +215,9 @@ export default function SettingsPage() {
                   />
                 </div>
                 {pinError && <p className="text-sm text-destructive">{pinError}</p>}
-                {pinSaved && <p className="text-sm text-primary">Code PIN enregistré avec succès.</p>}
-                <Button size="sm" onClick={handleSavePin} data-testid="button-save-pin">
-                  Enregistrer le PIN
+                {pinSaved && <p className="text-sm text-primary">Code PIN enregistré. Données chiffrées avec succès.</p>}
+                <Button size="sm" onClick={handleSavePin} disabled={pinBusy} data-testid="button-save-pin">
+                  {pinBusy ? "Chiffrement…" : "Enregistrer le PIN"}
                 </Button>
               </div>
             )}

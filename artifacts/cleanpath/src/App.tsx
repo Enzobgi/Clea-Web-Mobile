@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { PinLock } from "@/components/PinLock";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { UserProvider, useUser } from "@/store/UserContext";
+import { VaultProvider } from "@/store/VaultContext";
 import NotFound from "@/pages/not-found";
 
 import Home from "@/pages/Home";
@@ -51,11 +52,13 @@ function AppContent() {
   }
 
   return (
-    <PinLock key={currentUser}>
-      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-        <Router />
-      </WouterRouter>
-    </PinLock>
+    <VaultProvider>
+      <PinLock key={currentUser}>
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <Router />
+        </WouterRouter>
+      </PinLock>
+    </VaultProvider>
   );
 }
 
