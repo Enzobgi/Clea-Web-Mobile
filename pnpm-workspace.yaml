@@ -157,4 +157,9 @@ overrides:
   "@expo/ngrok-bin>@expo/ngrok-bin-win32-x64": "-"
   # drizzle-kit uses esbuild internally on an older version that's vulnerable, this overrides it
   "@esbuild-kit/esm-loader": "npm:tsx@^4.21.0"
-  esbuild: "0.27.3"
+  # Security: force all transitive esbuild resolutions off vulnerable <0.28.1
+  # Fixes GHSA-gv7w-rqvm-qjhr (High) and GHSA-g7r4-m6w7-qqqr (Low)
+  esbuild: "^0.28.1"
+  # Security: fix qs DoS via null/undefined in comma+encodeValuesOnly path
+  # Fixes GHSA-q8mj-m7cp-5q26 (Medium, CVE-2026-8723), patched in qs@6.15.2
+  qs: "^6.15.2"
