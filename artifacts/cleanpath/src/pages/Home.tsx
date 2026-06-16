@@ -3,7 +3,7 @@ import { useUser } from "@/store/UserContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from "date-fns";
+import { format, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from "date-fns";
 import { fr } from "date-fns/locale";
 import { AlertCircle, TrendingUp, Euro } from "lucide-react";
 
@@ -120,6 +120,23 @@ export default function Home() {
     ...consumptions.map(c => c.date),
   ]));
   const daysAbstinent = allMarkedDates.filter(d => getDayStatusGlobal(d) === "abstinent").length;
+
+  // Série en cours : jours consécutifs abstinents en remontant depuis aujourd'hui
+  let currentStreak = 0;
+  {
+    const todayDate = new Date();
+    let cursor = 0;
+    while (cursor < 3650) {
+      const d = format(subDays(todayDate, cursor), "yyyy-MM-dd");
+      if (getDayStatusGlobal(d) === "abstinent") {
+        currentStreak++;
+        cursor++;
+      } else {
+        break;
+      }
+    }
+  }
+
   const savings = daysAbstinent * settings.costPerDay;
   const hour = new Date().getHours();
   const greeting = hour < 5 ? "Bonne nuit" : hour < 12 ? "Bonjour" : hour < 18 ? "Bon après-midi" : "Bonsoir";
@@ -150,6 +167,14 @@ export default function Home() {
                 : `${daysAbstinent} jours cochés. Continue à ton rythme.`
             }
           </p>
+          {currentStreak > 0 && (
+            <div className="mt-3 pt-3 border-t border-primary-foreground/20 w-full flex items-center justify-center gap-2">
+              <span className="text-lg">🔥</span>
+              <p className="text-sm font-medium text-primary-foreground/90">
+                Série en cours&nbsp;: <span className="font-bold">{currentStreak} jour{currentStreak > 1 ? "s" : ""}</span> consécutif{currentStreak > 1 ? "s" : ""}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
