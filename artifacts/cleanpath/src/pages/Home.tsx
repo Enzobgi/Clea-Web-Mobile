@@ -3,7 +3,7 @@ import { useUser } from "@/store/UserContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { differenceInDays, format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from "date-fns";
 import { fr } from "date-fns/locale";
 import { AlertCircle, TrendingUp, Euro } from "lucide-react";
 
@@ -102,13 +102,24 @@ function MiniCalendar() {
 }
 
 export default function Home() {
-  const { sessions, settings, emotions } = useAppStore();
+  const { dayEntries, consumptions, settings, emotions } = useAppStore();
   const { currentUser } = useUser();
 
-  const currentSession = sessions.find(s => !s.endDate);
-  const daysAbstinent = currentSession
-    ? differenceInDays(new Date(), new Date(currentSession.startDate))
-    : 0;
+  const getDayStatusGlobal = (dateStr: string) => {
+    const entry = dayEntries.find(e => e.date === dateStr);
+    if (entry) return entry.status;
+    const hasConsumption = consumptions.some(c => c.date === dateStr && c.type === "consommation");
+    if (hasConsumption) return "consommation";
+    const hasCraving = consumptions.some(c => c.date === dateStr && c.type === "envie_seulement");
+    if (hasCraving) return "envie_forte";
+    return "non_renseigne";
+  };
+
+  const allMarkedDates = Array.from(new Set([
+    ...dayEntries.map(e => e.date),
+    ...consumptions.map(c => c.date),
+  ]));
+  const daysAbstinent = allMarkedDates.filter(d => getDayStatusGlobal(d) === "abstinent").length;
   const savings = daysAbstinent * settings.costPerDay;
   const hour = new Date().getHours();
   const greeting = hour < 5 ? "Bonne nuit" : hour < 12 ? "Bonjour" : hour < 18 ? "Bon après-midi" : "Bonsoir";
@@ -129,14 +140,14 @@ export default function Home() {
 
       <Card className="bg-primary border-none">
         <CardContent className="p-6 flex flex-col items-center justify-center text-center space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-widest text-primary-foreground/70">Jours d'abstinence</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary-foreground/70">Jours d'abstinence au total</p>
           <p className="text-7xl font-extralight text-primary-foreground" data-testid="text-days-abstinent">{daysAbstinent}</p>
           <p className="text-sm text-primary-foreground/80 max-w-xs">
             {daysAbstinent === 0
-              ? "Chaque moment compte. Tu es ici."
+              ? "Coche les jours sans consommation dans le calendrier."
               : daysAbstinent === 1
-                ? "Un jour à la fois. Tu es sur la bonne voie."
-                : `${daysAbstinent} jours. Continue à ton rythme.`
+                ? "Un premier jour coché. Chaque journée compte."
+                : `${daysAbstinent} jours cochés. Continue à ton rythme.`
             }
           </p>
         </CardContent>
