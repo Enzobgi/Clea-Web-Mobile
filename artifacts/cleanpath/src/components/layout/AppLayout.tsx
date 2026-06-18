@@ -15,15 +15,14 @@ import { useUser } from "@/store/UserContext";
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { settings } = useAppStore();
-  const { currentUser, users, switchUser } = useUser();
+  const { currentUser, logout } = useUser();
   const title = settings.discreteMode ? "Journal" : "CleanPath";
-  const otherUsers = users.filter(u => u !== currentUser);
 
   return (
     <div className="flex flex-col h-[100dvh] bg-background">
       <header className="hidden md:flex h-16 border-b border-border items-center px-6 justify-between">
         <h1 className="text-xl font-medium text-foreground">{title}</h1>
-        <UserMenu currentUser={currentUser} otherUsers={otherUsers} switchUser={switchUser} />
+        <UserMenu currentUser={currentUser} logout={logout} />
       </header>
 
       <div className="flex flex-1 overflow-hidden">
@@ -69,17 +68,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <Link href="/objectifs"><DropdownMenuItem><Target className="mr-2 h-4 w-4" /> Objectifs</DropdownMenuItem></Link>
             <Link href="/boite-a-outils"><DropdownMenuItem><PenTool className="mr-2 h-4 w-4" /> Boîte à outils</DropdownMenuItem></Link>
             <Link href="/parametres"><DropdownMenuItem><Settings className="mr-2 h-4 w-4" /> Paramètres</DropdownMenuItem></Link>
-            {otherUsers.length > 0 && (
-              <>
-                <DropdownMenuSeparator />
-                {otherUsers.map(u => (
-                  <DropdownMenuItem key={u} onClick={() => switchUser(u)}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Passer à {u}
-                  </DropdownMenuItem>
-                ))}
-              </>
-            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => void logout()}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Se déconnecter
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </nav>
@@ -87,7 +80,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-function UserMenu({ currentUser, otherUsers, switchUser }: { currentUser: string | null; otherUsers: string[]; switchUser: (name: string) => void }) {
+function UserMenu({ currentUser, logout }: { currentUser: string | null; logout: () => Promise<void> }) {
   if (!currentUser) return null;
 
   return (
@@ -102,26 +95,17 @@ function UserMenu({ currentUser, otherUsers, switchUser }: { currentUser: string
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        {otherUsers.length > 0 && (
-          <>
-            <div className="px-2 py-1.5 text-xs text-muted-foreground font-medium">Changer de profil</div>
-            {otherUsers.map(u => (
-              <DropdownMenuItem key={u} onClick={() => switchUser(u)}>
-                <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center mr-2">
-                  <span className="text-xs font-medium">{u.charAt(0).toUpperCase()}</span>
-                </div>
-                {u}
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-          </>
-        )}
         <Link href="/parametres">
           <DropdownMenuItem>
             <Settings className="mr-2 h-4 w-4" />
             Paramètres
           </DropdownMenuItem>
         </Link>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => void logout()}>
+          <LogOut className="mr-2 h-4 w-4" />
+          Se déconnecter
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -1,7 +1,12 @@
 import { useAppStore } from "@/store/useAppStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { differenceInDays, format, subDays, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
+import { format, subDays, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
 import { fr } from "date-fns/locale";
+import {
+  getBestAbstinentStreak,
+  getCurrentAbstinentStreak,
+  getTotalAbstinentDays,
+} from "@/lib/abstinence";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
@@ -19,18 +24,10 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
 }
 
 export default function StatsPage() {
-  const { sessions, consumptions, cravings, emotions } = useAppStore();
+  const { dayEntries, consumptions, cravings, emotions } = useAppStore();
 
-  const currentSession = sessions.find(s => !s.endDate);
-  const currentStreak = currentSession
-    ? differenceInDays(new Date(), new Date(currentSession.startDate))
-    : 0;
-
-  const bestStreak = sessions.reduce((best, s) => {
-    const end = s.endDate ? new Date(s.endDate) : new Date();
-    const days = differenceInDays(end, new Date(s.startDate));
-    return Math.max(best, days);
-  }, 0);
+  const currentStreak = getCurrentAbstinentStreak(dayEntries, consumptions);
+  const bestStreak = getBestAbstinentStreak(dayEntries, consumptions);
 
   const monthStart = startOfMonth(new Date());
   const monthEnd = endOfMonth(new Date());
@@ -42,10 +39,7 @@ export default function StatsPage() {
   const cravingsOvercome = cravings.filter(c => c.outcome === "tenu_bon").length +
     consumptions.filter(c => c.type === "envie_seulement").length;
 
-  const totalAbstinent = sessions.reduce((total, s) => {
-    const end = s.endDate ? new Date(s.endDate) : new Date();
-    return total + differenceInDays(end, new Date(s.startDate));
-  }, 0);
+  const totalAbstinent = getTotalAbstinentDays(dayEntries, consumptions);
 
   const triggerCounts: Record<string, number> = {};
   consumptions.filter(c => c.trigger).forEach(c => {

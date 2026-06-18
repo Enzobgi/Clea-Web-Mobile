@@ -3,9 +3,17 @@ import { useUser } from "@/store/UserContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { format, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from "date-fns";
 import { fr } from "date-fns/locale";
 import { AlertCircle, TrendingUp, Euro } from "lucide-react";
+import {
+  STATUS_COLORS,
+  STATUS_LABELS,
+  getCurrentAbstinentStreak,
+  getDayStatus,
+  getTotalAbstinentDays,
+  upsertDayEntriesForDates,
+} from "@/lib/abstinence";
 
 const QUOTES = [
   "Chaque journée sans consommer est une preuve de ta force.",
@@ -18,49 +26,19 @@ const QUOTES = [
   "La rechute n'est pas une fin. C'est une information qui t'aide à mieux te connaître.",
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  abstinent: "bg-primary",
-  consommation: "bg-destructive/60",
-  envie_forte: "bg-amber-400",
-  non_renseigne: "bg-muted",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  abstinent: "Abstinent",
-  consommation: "Consommation",
-  envie_forte: "Envie surmontée",
-  non_renseigne: "Non renseigné",
-};
-
 function MiniCalendar() {
   const { dayEntries, setDayEntries, consumptions } = useAppStore();
   const today = new Date();
   const days = eachDayOfInterval({ start: startOfMonth(today), end: endOfMonth(today) });
 
-  const getDayStatus = (day: Date) => {
-    const dateStr = format(day, "yyyy-MM-dd");
-    const entry = dayEntries.find(e => e.date === dateStr);
-    if (entry) return entry.status;
-    const hasConsumption = consumptions.some(c => c.date === dateStr && c.type === "consommation");
-    if (hasConsumption) return "consommation";
-    const hasCraving = consumptions.some(c => c.date === dateStr && c.type === "envie_seulement");
-    if (hasCraving) return "envie_forte";
-    return "non_renseigne";
-  };
-
   const cycleStatus = (day: Date) => {
     if (day > today) return;
     const dateStr = format(day, "yyyy-MM-dd");
     const statuses = ["abstinent", "consommation", "envie_forte", "non_renseigne"] as const;
-    const current = getDayStatus(day);
+    const current = getDayStatus(dateStr, dayEntries, consumptions);
     const idx = statuses.indexOf(current as typeof statuses[number]);
     const next = statuses[(idx + 1) % statuses.length];
-    const existing = dayEntries.find(e => e.date === dateStr);
-    if (existing) {
-      setDayEntries(dayEntries.map(e => e.date === dateStr ? { ...e, status: next } : e));
-    } else {
-      setDayEntries([...dayEntries, { date: dateStr, status: next }]);
-    }
+    setDayEntries(upsertDayEntriesForDates(dayEntries, [dateStr], next));
   };
 
   return (
@@ -71,7 +49,8 @@ function MiniCalendar() {
         ))}
         {Array.from({ length: (days[0].getDay() + 6) % 7 }).map((_, i) => <div key={`empty-${i}`} />)}
         {days.map(day => {
-          const status = getDayStatus(day);
+          const dateStr = format(day, "yyyy-MM-dd");
+          const status = getDayStatus(dateStr, dayEntries, consumptions);
           const isToday = isSameDay(day, today);
           return (
             <button
@@ -90,10 +69,10 @@ function MiniCalendar() {
         })}
       </div>
       <div className="flex flex-wrap gap-3 justify-center">
-        {Object.entries(STATUS_LABELS).map(([k, v]) => (
-          <div key={k} className="flex items-center gap-1.5">
-            <div className={`w-2.5 h-2.5 rounded-full ${STATUS_COLORS[k]}`} />
-            <span className="text-xs text-muted-foreground">{v}</span>
+        {(Object.keys(STATUS_LABELS) as Array<keyof typeof STATUS_LABELS>).map(status => (
+          <div key={status} className="flex items-center gap-1.5">
+            <div className={`w-2.5 h-2.5 rounded-full ${STATUS_COLORS[status]}`} />
+            <span className="text-xs text-muted-foreground">{STATUS_LABELS[status]}</span>
           </div>
         ))}
       </div>
@@ -105,37 +84,8 @@ export default function Home() {
   const { dayEntries, consumptions, settings, emotions } = useAppStore();
   const { currentUser } = useUser();
 
-  const getDayStatusGlobal = (dateStr: string) => {
-    const entry = dayEntries.find(e => e.date === dateStr);
-    if (entry) return entry.status;
-    const hasConsumption = consumptions.some(c => c.date === dateStr && c.type === "consommation");
-    if (hasConsumption) return "consommation";
-    const hasCraving = consumptions.some(c => c.date === dateStr && c.type === "envie_seulement");
-    if (hasCraving) return "envie_forte";
-    return "non_renseigne";
-  };
-
-  const allMarkedDates = Array.from(new Set([
-    ...dayEntries.map(e => e.date),
-    ...consumptions.map(c => c.date),
-  ]));
-  const daysAbstinent = allMarkedDates.filter(d => getDayStatusGlobal(d) === "abstinent").length;
-
-  // Série en cours : jours consécutifs abstinents en remontant depuis aujourd'hui
-  let currentStreak = 0;
-  {
-    const todayDate = new Date();
-    let cursor = 0;
-    while (cursor < 3650) {
-      const d = format(subDays(todayDate, cursor), "yyyy-MM-dd");
-      if (getDayStatusGlobal(d) === "abstinent") {
-        currentStreak++;
-        cursor++;
-      } else {
-        break;
-      }
-    }
-  }
+  const daysAbstinent = getTotalAbstinentDays(dayEntries, consumptions);
+  const currentStreak = getCurrentAbstinentStreak(dayEntries, consumptions);
 
   const savings = daysAbstinent * settings.costPerDay;
   const hour = new Date().getHours();

@@ -11,12 +11,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Plus, Star, Trash2 } from "lucide-react";
+import { upsertDayEntriesForDates } from "@/lib/abstinence";
 
 const CONTEXTS = ["Seul(e)", "Avec des amis", "Stress", "Fête", "Ennui", "Conflit", "Fatigue", "Autre"];
 const EMOTIONS = ["Anxieux/se", "Déprimé(e)", "En colère", "Frustré(e)", "Heureux/se", "Calme", "Excité(e)", "Fatigué(e)", "Seul(e)", "Nostalgique", "Autre"];
 const TRIGGERS = ["Stress au travail", "Problème relationnel", "Ennui", "Pression sociale", "Douleur physique", "Mauvaises nouvelles", "Habitude", "Autre"];
 
-const emptyForm = {
+type ConsumptionForm = Omit<ConsumptionEntry, "id">;
+
+const emptyForm: ConsumptionForm = {
   date: new Date().toISOString().slice(0, 10),
   time: new Date().toTimeString().slice(0, 5),
   substance: "",
@@ -27,11 +30,11 @@ const emptyForm = {
   trigger: "",
   cravingLevel: 5,
   note: "",
-  type: "consommation" as const,
+  type: "consommation",
 };
 
 export default function ConsumptionJournalPage() {
-  const { consumptions, setConsumptions } = useAppStore();
+  const { consumptions, setConsumptions, dayEntries, setDayEntries } = useAppStore();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [relapseMessage, setRelapseMessage] = useState<string | null>(null);
@@ -47,6 +50,11 @@ export default function ConsumptionJournalPage() {
       ...form,
     };
     setConsumptions([entry, ...consumptions]);
+    setDayEntries(upsertDayEntriesForDates(
+      dayEntries,
+      [form.date],
+      form.type === "consommation" ? "consommation" : "envie_forte",
+    ));
     setOpen(false);
     if (form.type === "consommation") {
       setRelapseMessage("Une rechute ne détruit pas ton chemin. Elle donne une information. Que peux-tu apprendre de ce moment ?");
@@ -54,7 +62,29 @@ export default function ConsumptionJournalPage() {
   };
 
   const handleDelete = (id: string) => {
-    setConsumptions(consumptions.filter(c => c.id !== id));
+    const deletedEntry = consumptions.find(c => c.id === id);
+    const remainingConsumptions = consumptions.filter(c => c.id !== id);
+    setConsumptions(remainingConsumptions);
+
+    if (!deletedEntry) return;
+
+    const sameDateHasConsumption = remainingConsumptions.some(c =>
+      c.date === deletedEntry.date && c.type === "consommation"
+    );
+    if (sameDateHasConsumption) return;
+
+    const sameDateHasCraving = remainingConsumptions.some(c =>
+      c.date === deletedEntry.date && c.type === "envie_seulement"
+    );
+    const currentDayEntry = dayEntries.find(entry => entry.date === deletedEntry.date);
+
+    if (currentDayEntry?.status === "consommation" || currentDayEntry?.status === "envie_forte") {
+      setDayEntries(upsertDayEntriesForDates(
+        dayEntries,
+        [deletedEntry.date],
+        sameDateHasCraving ? "envie_forte" : "non_renseigne",
+      ));
+    }
   };
 
   return (

@@ -45,7 +45,15 @@ function Router() {
 }
 
 function AppContent() {
-  const { currentUser } = useUser();
+  const { currentUser, user, isLoading } = useUser();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">Ouverture de ton espace...</p>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <WelcomeScreen />;
@@ -53,7 +61,7 @@ function AppContent() {
 
   return (
     <VaultProvider>
-      <PinLock key={currentUser}>
+      <PinLock key={user?.id}>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <Router />
         </WouterRouter>

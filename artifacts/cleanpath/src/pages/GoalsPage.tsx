@@ -5,22 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { differenceInDays, format } from "date-fns";
+import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Check, Plus } from "lucide-react";
+import { getCurrentAbstinentStreak } from "@/lib/abstinence";
 
 const PRESET_DAYS = [1, 3, 7, 14, 30, 60, 90];
 
 export default function GoalsPage() {
-  const { goals, setGoals, sessions } = useAppStore();
+  const { goals, setGoals, dayEntries, consumptions } = useAppStore();
   const [open, setOpen] = useState(false);
   const [customDays, setCustomDays] = useState("");
   const [customReward, setCustomReward] = useState("");
 
-  const currentSession = sessions.find(s => !s.endDate);
-  const currentStreak = currentSession
-    ? differenceInDays(new Date(), new Date(currentSession.startDate))
-    : 0;
+  const currentStreak = getCurrentAbstinentStreak(dayEntries, consumptions);
 
   const getProgress = (days: number) => Math.min(100, Math.round((currentStreak / days) * 100));
 

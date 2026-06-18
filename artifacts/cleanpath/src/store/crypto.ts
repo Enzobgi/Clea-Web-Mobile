@@ -1,10 +1,10 @@
 export const PBKDF2_ITERATIONS = 200_000;
 
-export async function generateSalt(): Promise<Uint8Array> {
+export async function generateSalt(): Promise<Uint8Array<ArrayBuffer>> {
   return crypto.getRandomValues(new Uint8Array(16));
 }
 
-export async function deriveKey(pin: string, salt: Uint8Array): Promise<CryptoKey> {
+export async function deriveKey(pin: string, salt: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(pin),
@@ -25,7 +25,7 @@ function toBase64(buf: ArrayBuffer): string {
   return btoa(String.fromCharCode(...new Uint8Array(buf)));
 }
 
-function fromBase64(s: string): Uint8Array {
+function fromBase64(s: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(atob(s), c => c.charCodeAt(0));
 }
 

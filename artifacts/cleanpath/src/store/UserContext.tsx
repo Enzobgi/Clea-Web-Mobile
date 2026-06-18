@@ -1,79 +1,101 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-interface UserContextType {
-  currentUser: string | null;
-  users: string[];
-  setUser: (name: string) => void;
-  switchUser: (name: string) => void;
-  deleteUser: (name: string) => void;
+export interface AccountUser {
+  id: string;
+  email: string;
+  displayName: string;
 }
 
-const UserContext = createContext<UserContextType>({
-  currentUser: null,
-  users: [],
-  setUser: () => {},
-  switchUser: () => {},
-  deleteUser: () => {},
-});
+interface UserContextType {
+  user: AccountUser | null;
+  currentUser: string | null;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (displayName: string, email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+}
 
-export function getUserStoragePrefix(username: string): string {
-  return `cleanpath_${username.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "")}`;
+const UserContext = createContext<UserContextType | null>(null);
+
+export function getUserStoragePrefix(identifier: string): string {
+  return `cleanpath_${identifier.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_-]/g, "")}`;
+}
+
+async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`/api${path}`, {
+    ...init,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...init?.headers,
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(body?.error || "Une erreur est survenue.");
+  }
+
+  if (response.status === 204) return undefined as T;
+  return response.json() as Promise<T>;
 }
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<string | null>(() => {
-    return localStorage.getItem("cleanpath_current_user");
-  });
+  const [user, setUser] = useState<AccountUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [users, setUsers] = useState<string[]>(() => {
-    try {
-      const stored = localStorage.getItem("cleanpath_users");
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
+  useEffect(() => {
+    let active = true;
 
-  const setUser = (name: string) => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const updated = users.includes(trimmed) ? users : [...users, trimmed];
-    setUsers(updated);
-    setCurrentUser(trimmed);
-    localStorage.setItem("cleanpath_current_user", trimmed);
-    localStorage.setItem("cleanpath_users", JSON.stringify(updated));
-  };
+    apiRequest<{ user: AccountUser }>("/auth/me")
+      .then(result => {
+        if (active) setUser(result.user);
+      })
+      .catch(() => {
+        if (active) setUser(null);
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
 
-  const switchUser = (name: string) => {
-    setCurrentUser(name);
-    localStorage.setItem("cleanpath_current_user", name);
-  };
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  const deleteUser = (name: string) => {
-    const prefix = getUserStoragePrefix(name);
-    const suffixes = ["_sessions", "_dayEntries", "_consumptions", "_emotions", "_cravings", "_safetyPlan", "_contacts", "_goals", "_settings"];
-    suffixes.forEach(s => localStorage.removeItem(`${prefix}${s}`));
-    const updated = users.filter(u => u !== name);
-    setUsers(updated);
-    localStorage.setItem("cleanpath_users", JSON.stringify(updated));
-    if (currentUser === name) {
-      const next = updated[0] ?? null;
-      setCurrentUser(next);
-      if (next) {
-        localStorage.setItem("cleanpath_current_user", next);
-      } else {
-        localStorage.removeItem("cleanpath_current_user");
-      }
-    }
-  };
+  const value = useMemo<UserContextType>(() => ({
+    user,
+    currentUser: user?.displayName ?? null,
+    isLoading,
+    async login(email, password) {
+      const result = await apiRequest<{ user: AccountUser }>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      setUser(result.user);
+    },
+    async register(displayName, email, password) {
+      const result = await apiRequest<{ user: AccountUser }>("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ displayName, email, password }),
+      });
+      setUser(result.user);
+    },
+    async logout() {
+      await apiRequest<void>("/auth/logout", { method: "POST" });
+      setUser(null);
+    },
+  }), [user, isLoading]);
 
   return (
-    <UserContext.Provider value={{ currentUser, users, setUser, switchUser, deleteUser }}>
+    <UserContext.Provider value={value}>
       {children}
     </UserContext.Provider>
   );
 }
 
 export function useUser() {
-  return useContext(UserContext);
+  const context = useContext(UserContext);
+  if (!context) throw new Error("useUser must be used within UserProvider");
+  return context;
 }
