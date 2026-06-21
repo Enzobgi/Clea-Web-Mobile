@@ -22,7 +22,7 @@ import {
 import { LogOut } from "lucide-react";
 
 export default function SettingsPage() {
-  const { settings, setSettings, prefix } = useAppStore();
+  const { settings, setSettings, prefix, chatMemory, setChatMemory } = useAppStore();
   const { currentUser, user, logout } = useUser();
   const { vaultPresent, enableVault, disableVault, vaultData } = useVault();
   const [pinInput, setPinInput] = useState("");
@@ -66,7 +66,7 @@ export default function SettingsPage() {
 
   const handleExport = () => {
     const data: Record<string, unknown> = {};
-    const suffixes = ["_sessions", "_dayEntries", "_consumptions", "_emotions", "_cravings", "_safetyPlan", "_contacts", "_goals"];
+    const suffixes = ["_sessions", "_dayEntries", "_consumptions", "_emotions", "_gratitudes", "_cravings", "_safetyPlan", "_contacts", "_goals", "_profile", "_weeklyGoals", "_programProgress", "_chatMemory"];
 
     if (vaultPresent && vaultData) {
       suffixes.forEach(s => { data[`${prefix}${s}`] = vaultData[`${prefix}${s}`] ?? null; });
@@ -192,6 +192,22 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
+
+          <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
+            <div className="space-y-0.5">
+              <Label>Mémoire du chat</Label>
+              <p className="text-sm text-muted-foreground">Autorise uniquement les informations que tu choisis d'enregistrer.</p>
+            </div>
+            <Switch
+              checked={settings.chatMemoryEnabled}
+              onCheckedChange={chatMemoryEnabled => setSettings({ ...settings, chatMemoryEnabled })}
+            />
+          </div>
+          {chatMemory.length > 0 && (
+            <Button variant="outline" size="sm" onClick={() => setChatMemory([])}>
+              Supprimer la mémoire du chat
+            </Button>
+          )}
         </CardContent>
       </Card>
 

@@ -1,8 +1,18 @@
-import { useState, useEffect, useRef, Dispatch, SetStateAction } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  Dispatch,
+  SetStateAction,
+  type ReactNode,
+} from "react";
 import { useLocalStorage } from "./use-local-storage";
 import { useUser, getUserStoragePrefix } from "./UserContext";
 import { useVault } from "./VaultContext";
 import { subDays } from "date-fns";
+import type { ChatMemory, ProgramProgress, UserProfile, WeeklyGoal } from "@/types/domain";
 
 export type DayStatus = "abstinent" | "consommation" | "envie_forte" | "non_renseigne";
 
@@ -46,6 +56,12 @@ export interface EmotionalEntry {
   intentionForTomorrow: string;
 }
 
+export interface GratitudeEntry {
+  id: string;
+  date: string;
+  text: string;
+}
+
 export interface CravingEvent {
   id: string;
   date: string;
@@ -83,12 +99,29 @@ export interface AppSettings {
   discreteMode: boolean;
   costPerDay: number;
   reminderSettings: { [key: string]: boolean };
+  chatMemoryEnabled: boolean;
 }
 
 const defaultSettings: AppSettings = {
   discreteMode: false,
   costPerDay: 15,
-  reminderSettings: {}
+  reminderSettings: {},
+  chatMemoryEnabled: false,
+};
+
+const defaultProfile: UserProfile = {
+  nickname: "",
+  ageRange: "",
+  objective: "",
+  substance: "",
+  frequency: "",
+  difficultSituations: [],
+  strategiesTried: [],
+  region: "Belgique",
+  notificationsEnabled: false,
+  personalGoal: "",
+  startDate: new Date().toISOString().slice(0, 10),
+  onboardingCompleted: false,
 };
 
 const defaultSafetyPlan: SafetyPlan = {
@@ -114,16 +147,22 @@ const memoryCache = new Map<string, unknown>();
 const STORE_UPDATE_EVENT = "cleanpath-store-update";
 const remoteLoadPromises = new Map<string, Promise<Record<string, unknown>>>();
 const remoteSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const remoteSaveChains = new Map<string, Promise<void>>();
 
 const dataSuffixes = [
   "sessions",
   "dayEntries",
   "consumptions",
   "emotions",
+  "gratitudes",
   "cravings",
   "safetyPlan",
   "contacts",
   "goals",
+  "profile",
+  "weeklyGoals",
+  "programProgress",
+  "chatMemory",
   "settings",
 ] as const;
 
@@ -195,9 +234,21 @@ function scheduleRemoteSave(userId: string, data: Record<string, unknown>) {
   if (existingTimer) clearTimeout(existingTimer);
   remoteSaveTimers.set(userId, setTimeout(() => {
     remoteSaveTimers.delete(userId);
-    void saveRemoteData(userId, data).catch(() => {
-      // The local copy remains available and a later edit will retry.
-    });
+    const previousSave = remoteSaveChains.get(userId) ?? Promise.resolve();
+    const nextSave = previousSave
+      .catch(() => undefined)
+      .then(() => saveRemoteData(userId, data));
+
+    remoteSaveChains.set(userId, nextSave);
+    void nextSave
+      .catch(() => {
+        // The local copy remains available and a later edit will retry.
+      })
+      .finally(() => {
+        if (remoteSaveChains.get(userId) === nextSave) {
+          remoteSaveChains.delete(userId);
+        }
+      });
   }, 600));
 }
 
@@ -222,16 +273,15 @@ function loadRemoteData(userId: string, accountPrefix: string, legacyPrefix: str
       }
       return remoteData;
     })
-    .catch(error => {
+    .finally(() => {
       remoteLoadPromises.delete(userId);
-      throw error;
     });
 
   remoteLoadPromises.set(userId, promise);
   return promise;
 }
 
-export function useAppStore() {
+function useAppStoreState() {
   const { currentUser, user } = useUser();
   const prefix = user ? getUserStoragePrefix(`account_${user.id}`) : "cleanpath_guest";
   const legacyPrefix = currentUser ? getUserStoragePrefix(currentUser) : "cleanpath_guest";
@@ -250,6 +300,9 @@ export function useAppStore() {
   const [emotions, setEmotions_] = useState<EmotionalEntry[]>(
     () => readFromStorage(`${prefix}_emotions`, [], vaultData, vaultPresent)
   );
+  const [gratitudes, setGratitudes_] = useState<GratitudeEntry[]>(
+    () => readFromStorage(`${prefix}_gratitudes`, [], vaultData, vaultPresent)
+  );
   const [cravings, setCravings_] = useState<CravingEvent[]>(
     () => readFromStorage(`${prefix}_cravings`, [], vaultData, vaultPresent)
   );
@@ -262,6 +315,18 @@ export function useAppStore() {
   const [goals, setGoals_] = useState<Goal[]>(
     () => readFromStorage(`${prefix}_goals`, defaultGoals, vaultData, vaultPresent)
   );
+  const [profile, setProfile_] = useState<UserProfile>(
+    () => readFromStorage(`${prefix}_profile`, defaultProfile, vaultData, vaultPresent)
+  );
+  const [weeklyGoals, setWeeklyGoals_] = useState<WeeklyGoal[]>(
+    () => readFromStorage(`${prefix}_weeklyGoals`, [], vaultData, vaultPresent)
+  );
+  const [programProgress, setProgramProgress_] = useState<ProgramProgress[]>(
+    () => readFromStorage(`${prefix}_programProgress`, [], vaultData, vaultPresent)
+  );
+  const [chatMemory, setChatMemory_] = useState<ChatMemory[]>(
+    () => readFromStorage(`${prefix}_chatMemory`, [], vaultData, vaultPresent)
+  );
 
   const [settings, setSettings_] = useLocalStorage<AppSettings>(`${prefix}_settings`, defaultSettings);
 
@@ -269,10 +334,15 @@ export function useAppStore() {
   const setDayEntries = makeSetter(`${prefix}_dayEntries`, setDayEntries_, vaultPresent);
   const setConsumptions = makeSetter(`${prefix}_consumptions`, setConsumptions_, vaultPresent);
   const setEmotions = makeSetter(`${prefix}_emotions`, setEmotions_, vaultPresent);
+  const setGratitudes = makeSetter(`${prefix}_gratitudes`, setGratitudes_, vaultPresent);
   const setCravings = makeSetter(`${prefix}_cravings`, setCravings_, vaultPresent);
   const setSafetyPlan = makeSetter(`${prefix}_safetyPlan`, setSafetyPlan_, vaultPresent);
   const setContacts = makeSetter(`${prefix}_contacts`, setContacts_, vaultPresent);
   const setGoals = makeSetter(`${prefix}_goals`, setGoals_, vaultPresent);
+  const setProfile = makeSetter(`${prefix}_profile`, setProfile_, vaultPresent);
+  const setWeeklyGoals = makeSetter(`${prefix}_weeklyGoals`, setWeeklyGoals_, vaultPresent);
+  const setProgramProgress = makeSetter(`${prefix}_programProgress`, setProgramProgress_, vaultPresent);
+  const setChatMemory = makeSetter(`${prefix}_chatMemory`, setChatMemory_, vaultPresent);
   const setSettings = (value: AppSettings) => {
     memoryCache.set(`${prefix}_settings`, value);
     setSettings_(value);
@@ -281,8 +351,8 @@ export function useAppStore() {
     }));
   };
 
-  const stateRef = useRef({ sessions, dayEntries, consumptions, emotions, cravings, safetyPlan, contacts, goals, settings });
-  stateRef.current = { sessions, dayEntries, consumptions, emotions, cravings, safetyPlan, contacts, goals, settings };
+  const stateRef = useRef({ sessions, dayEntries, consumptions, emotions, gratitudes, cravings, safetyPlan, contacts, goals, profile, weeklyGoals, programProgress, chatMemory, settings });
+  stateRef.current = { sessions, dayEntries, consumptions, emotions, gratitudes, cravings, safetyPlan, contacts, goals, profile, weeklyGoals, programProgress, chatMemory, settings };
 
   useEffect(() => {
     if (!user) {
@@ -301,21 +371,31 @@ export function useAppStore() {
         const nextDayEntries = (data.dayEntries as DayEntry[] | undefined) ?? [];
         const nextConsumptions = (data.consumptions as ConsumptionEntry[] | undefined) ?? [];
         const nextEmotions = (data.emotions as EmotionalEntry[] | undefined) ?? [];
+        const nextGratitudes = (data.gratitudes as GratitudeEntry[] | undefined) ?? [];
         const nextCravings = (data.cravings as CravingEvent[] | undefined) ?? [];
         const nextSafetyPlan = (data.safetyPlan as SafetyPlan | undefined) ?? defaultSafetyPlan;
         const nextContacts = (data.contacts as TrustedContact[] | undefined) ?? [];
         const nextGoals = (data.goals as Goal[] | undefined) ?? defaultGoals;
-        const nextSettings = (data.settings as AppSettings | undefined) ?? defaultSettings;
+        const nextProfile = (data.profile as UserProfile | undefined) ?? defaultProfile;
+        const nextWeeklyGoals = (data.weeklyGoals as WeeklyGoal[] | undefined) ?? [];
+        const nextProgramProgress = (data.programProgress as ProgramProgress[] | undefined) ?? [];
+        const nextChatMemory = (data.chatMemory as ChatMemory[] | undefined) ?? [];
+        const nextSettings = { ...defaultSettings, ...((data.settings as Partial<AppSettings> | undefined) ?? {}) };
 
         const values: Array<[string, unknown]> = [
           [`${prefix}_sessions`, nextSessions],
           [`${prefix}_dayEntries`, nextDayEntries],
           [`${prefix}_consumptions`, nextConsumptions],
           [`${prefix}_emotions`, nextEmotions],
+          [`${prefix}_gratitudes`, nextGratitudes],
           [`${prefix}_cravings`, nextCravings],
           [`${prefix}_safetyPlan`, nextSafetyPlan],
           [`${prefix}_contacts`, nextContacts],
           [`${prefix}_goals`, nextGoals],
+          [`${prefix}_profile`, nextProfile],
+          [`${prefix}_weeklyGoals`, nextWeeklyGoals],
+          [`${prefix}_programProgress`, nextProgramProgress],
+          [`${prefix}_chatMemory`, nextChatMemory],
           [`${prefix}_settings`, nextSettings],
         ];
         values.forEach(([key, value]) => {
@@ -327,10 +407,15 @@ export function useAppStore() {
         setDayEntries_(nextDayEntries);
         setConsumptions_(nextConsumptions);
         setEmotions_(nextEmotions);
+        setGratitudes_(nextGratitudes);
         setCravings_(nextCravings);
         setSafetyPlan_(nextSafetyPlan);
         setContacts_(nextContacts);
         setGoals_(nextGoals);
+        setProfile_(nextProfile);
+        setWeeklyGoals_(nextWeeklyGoals);
+        setProgramProgress_(nextProgramProgress);
+        setChatMemory_(nextChatMemory);
         setSettings_(nextSettings);
         setRemoteReady(true);
       })
@@ -361,6 +446,9 @@ export function useAppStore() {
         case `${prefix}_emotions`:
           setEmotions_(value as EmotionalEntry[]);
           break;
+        case `${prefix}_gratitudes`:
+          setGratitudes_(value as GratitudeEntry[]);
+          break;
         case `${prefix}_cravings`:
           setCravings_(value as CravingEvent[]);
           break;
@@ -372,6 +460,18 @@ export function useAppStore() {
           break;
         case `${prefix}_goals`:
           setGoals_(value as Goal[]);
+          break;
+        case `${prefix}_profile`:
+          setProfile_(value as UserProfile);
+          break;
+        case `${prefix}_weeklyGoals`:
+          setWeeklyGoals_(value as WeeklyGoal[]);
+          break;
+        case `${prefix}_programProgress`:
+          setProgramProgress_(value as ProgramProgress[]);
+          break;
+        case `${prefix}_chatMemory`:
+          setChatMemory_(value as ChatMemory[]);
           break;
         case `${prefix}_settings`:
           setSettings_(value as AppSettings);
@@ -391,14 +491,19 @@ export function useAppStore() {
         [`${prefix}_dayEntries`]: stateRef.current.dayEntries,
         [`${prefix}_consumptions`]: stateRef.current.consumptions,
         [`${prefix}_emotions`]: stateRef.current.emotions,
+        [`${prefix}_gratitudes`]: stateRef.current.gratitudes,
         [`${prefix}_cravings`]: stateRef.current.cravings,
         [`${prefix}_safetyPlan`]: stateRef.current.safetyPlan,
         [`${prefix}_contacts`]: stateRef.current.contacts,
         [`${prefix}_goals`]: stateRef.current.goals,
+        [`${prefix}_profile`]: stateRef.current.profile,
+        [`${prefix}_weeklyGoals`]: stateRef.current.weeklyGoals,
+        [`${prefix}_programProgress`]: stateRef.current.programProgress,
+        [`${prefix}_chatMemory`]: stateRef.current.chatMemory,
       });
     }, 300);
     return () => clearTimeout(timer);
-  }, [sessions, dayEntries, consumptions, emotions, cravings, safetyPlan, contacts, goals, vaultPresent, saveData, prefix]);
+  }, [sessions, dayEntries, consumptions, emotions, gratitudes, cravings, safetyPlan, contacts, goals, profile, weeklyGoals, programProgress, chatMemory, vaultPresent, saveData, prefix]);
 
   useEffect(() => {
     if (!user || !remoteReady) return;
@@ -407,10 +512,15 @@ export function useAppStore() {
       dayEntries,
       consumptions,
       emotions,
+      gratitudes,
       cravings,
       safetyPlan,
       contacts,
       goals,
+      profile,
+      weeklyGoals,
+      programProgress,
+      chatMemory,
       settings,
     });
   }, [
@@ -420,23 +530,64 @@ export function useAppStore() {
     dayEntries,
     consumptions,
     emotions,
+    gratitudes,
     cravings,
     safetyPlan,
     contacts,
     goals,
+    profile,
+    weeklyGoals,
+    programProgress,
+    chatMemory,
     settings,
   ]);
 
   return {
+    isReady: !user || remoteReady,
     prefix,
     sessions, setSessions,
     dayEntries, setDayEntries,
     consumptions, setConsumptions,
     emotions, setEmotions,
+    gratitudes, setGratitudes,
     cravings, setCravings,
     safetyPlan, setSafetyPlan,
     contacts, setContacts,
     goals, setGoals,
+    profile, setProfile,
+    weeklyGoals, setWeeklyGoals,
+    programProgress, setProgramProgress,
+    chatMemory, setChatMemory,
     settings, setSettings
   };
+}
+
+type AppStoreValue = ReturnType<typeof useAppStoreState>;
+
+const AppStoreContext = createContext<AppStoreValue | null>(null);
+
+export function AppStoreProvider({ children }: { children: ReactNode }) {
+  const store = useAppStoreState();
+
+  if (!store.isReady) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">Synchronisation de ton espace...</p>
+      </div>
+    );
+  }
+
+  return (
+    <AppStoreContext.Provider value={store}>
+      {children}
+    </AppStoreContext.Provider>
+  );
+}
+
+export function useAppStore() {
+  const store = useContext(AppStoreContext);
+  if (!store) {
+    throw new Error("useAppStore must be used within AppStoreProvider");
+  }
+  return store;
 }

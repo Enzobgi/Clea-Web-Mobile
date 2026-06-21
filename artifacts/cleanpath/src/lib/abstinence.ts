@@ -80,6 +80,41 @@ export function getBestAbstinentStreak(dayEntries: DayEntry[], consumptions: Con
   return best;
 }
 
+export interface StatusStreak {
+  status: "abstinent" | "consommation";
+  startDate: string;
+  endDate: string;
+  days: number;
+}
+
+export function getStatusStreaks(dayEntries: DayEntry[], consumptions: ConsumptionEntry[]) {
+  const dates = getMarkedDates(dayEntries, consumptions);
+  const streaks: StatusStreak[] = [];
+  let current: StatusStreak | null = null;
+
+  for (const dateStr of dates) {
+    const status = getDayStatus(dateStr, dayEntries, consumptions);
+    if (status !== "abstinent" && status !== "consommation") {
+      current = null;
+      continue;
+    }
+
+    const followsCurrent = current
+      && current.status === status
+      && differenceInCalendarDays(parseDate(dateStr), parseDate(current.endDate)) === 1;
+
+    if (followsCurrent && current) {
+      current.endDate = dateStr;
+      current.days++;
+    } else {
+      current = { status, startDate: dateStr, endDate: dateStr, days: 1 };
+      streaks.push(current);
+    }
+  }
+
+  return streaks.sort((a, b) => b.endDate.localeCompare(a.endDate));
+}
+
 export function buildDateRange(startDate: string, endDate: string, today = new Date()) {
   if (!startDate || !endDate) return [];
 

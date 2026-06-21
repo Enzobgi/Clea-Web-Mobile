@@ -9,6 +9,8 @@ import {
   buildDateRange,
   getCurrentAbstinentStreak,
   getDayStatus,
+  getMarkedDates,
+  getStatusStreaks,
   getTotalAbstinentDays,
   upsertDayEntriesForDates,
 } from "@/lib/abstinence";
@@ -39,6 +41,11 @@ export default function CalendarPage() {
   const totalAbstinent = getTotalAbstinentDays(dayEntries, consumptions);
   const currentStreak = getCurrentAbstinentStreak(dayEntries, consumptions);
   const pendingRange = buildDateRange(rangeStart, rangeEnd, today);
+  const statusStreaks = getStatusStreaks(dayEntries, consumptions);
+  const recordedDays = getMarkedDates(dayEntries, consumptions)
+    .map(date => ({ date, status: getDayStatus(date, dayEntries, consumptions) }))
+    .filter(day => day.status === "abstinent" || day.status === "consommation")
+    .sort((a, b) => b.date.localeCompare(a.date));
   const pendingRangeLabel = `${pendingRange.length} jour${pendingRange.length > 1 ? "s" : ""} ${pendingRange.length > 1 ? "seront ajoutés" : "sera ajouté"} au total.`;
   
   const handleReset = () => {
@@ -223,21 +230,83 @@ export default function CalendarPage() {
       </div>
       
       <div className="space-y-4">
-        <h3 className="text-lg font-medium">Historique</h3>
-        {sessions.map(session => (
-          <Card key={session.id}>
-            <CardContent className="p-4 flex justify-between items-center">
-              <div>
-                <p className="font-medium">
-                  {format(new Date(session.startDate), "d MMMM yyyy", { locale: fr })} - 
-                  {session.endDate ? format(new Date(session.endDate), " d MMMM yyyy", { locale: fr }) : " Aujourd'hui"}
-                </p>
+        <h3 className="text-lg font-medium">Historique du calendrier</h3>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Séries de jours</CardTitle>
+            <CardDescription>Les périodes consécutives sans consommation et avec consommation.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {statusStreaks.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucune série enregistrée pour le moment.</p>
+            ) : statusStreaks.map(streak => (
+              <div key={`${streak.status}-${streak.startDate}`} className="flex items-center justify-between gap-3 rounded-md bg-muted/35 p-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`h-3 w-3 rounded-full shrink-0 ${STATUS_COLORS[streak.status]}`} />
+                  <div>
+                    <p className="text-sm font-medium">
+                      {streak.status === "abstinent" ? "Sans consommation" : "Avec consommation"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatCalendarRange(streak.startDate, streak.endDate)}
+                    </p>
+                  </div>
+                </div>
+                <span className={`text-sm font-semibold shrink-0 ${streak.status === "abstinent" ? "text-primary" : "text-destructive"}`}>
+                  {streak.days} jour{streak.days > 1 ? "s" : ""}
+                </span>
               </div>
-              {!session.endDate && <span className="text-primary text-sm font-medium">En cours</span>}
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Jours enregistrés</CardTitle>
+            <CardDescription>Le détail des jours avec et sans consommation.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {recordedDays.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucun jour enregistré pour le moment.</p>
+            ) : recordedDays.map(day => (
+              <div key={day.date} className="flex items-center justify-between border-b border-border py-2 last:border-0">
+                <span className="text-sm capitalize">
+                  {format(new Date(`${day.date}T00:00:00`), "EEEE d MMMM yyyy", { locale: fr })}
+                </span>
+                <span className={`text-xs font-medium ${day.status === "abstinent" ? "text-primary" : "text-destructive"}`}>
+                  {day.status === "abstinent" ? "Sans consommation" : "Consommation"}
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {sessions.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Périodes suivies</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {sessions.map(session => (
+                <div key={session.id} className="flex justify-between items-center">
+                  <p className="text-sm font-medium">
+                    {format(new Date(session.startDate), "d MMMM yyyy", { locale: fr })} -
+                    {session.endDate ? format(new Date(session.endDate), " d MMMM yyyy", { locale: fr }) : " Aujourd'hui"}
+                  </p>
+                  {!session.endDate && <span className="text-primary text-xs font-medium">En cours</span>}
+                </div>
+              ))}
             </CardContent>
           </Card>
-        ))}
+        )}
       </div>
     </div>
   );
+}
+
+function formatCalendarRange(startDate: string, endDate: string) {
+  const start = format(new Date(`${startDate}T00:00:00`), "d MMM", { locale: fr });
+  const end = format(new Date(`${endDate}T00:00:00`), "d MMM yyyy", { locale: fr });
+  return startDate === endDate ? end : `Du ${start} au ${end}`;
 }

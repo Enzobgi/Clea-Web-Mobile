@@ -26,8 +26,8 @@ interface VaultContextValue {
 const VaultContext = createContext<VaultContextValue | null>(null);
 
 export function VaultProvider({ children }: { children: ReactNode }) {
-  const { currentUser } = useUser();
-  const prefix = currentUser ? getUserStoragePrefix(currentUser) : "cleanpath_guest";
+  const { user } = useUser();
+  const prefix = user ? getUserStoragePrefix(`account_${user.id}`) : "cleanpath_guest";
 
   const [vaultPresent, setVaultPresent] = useState<boolean>(() => isVaultPresent(prefix));
   const [isUnlocked, setIsUnlocked] = useState(false);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppStore } from "@/store/useAppStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Heart, Moon, Sparkles, Sun } from "lucide-react";
 
 function ScoreSlider({ label, value, onChange, color = "primary" }: { label: string; value: number; onChange: (v: number) => void; color?: string }) {
   const labels = ["", "Très bas", "Bas", "Faible", "Médiocre", "Moyen", "Correct", "Bien", "Très bien", "Excellent", "Parfait"];
@@ -44,6 +44,21 @@ export default function EmotionalJournalPage() {
     whatWasDifficult: todayEntry?.whatWasDifficult ?? "",
     intentionForTomorrow: todayEntry?.intentionForTomorrow ?? "",
   });
+  const [savedMessage, setSavedMessage] = useState("");
+
+  useEffect(() => {
+    if (!todayEntry) return;
+    setForm({
+      mood: todayEntry.mood,
+      anxiety: todayEntry.anxiety,
+      sleepQuality: todayEntry.sleepQuality,
+      energy: todayEntry.energy,
+      gratitude: todayEntry.gratitude,
+      whatHelped: todayEntry.whatHelped,
+      whatWasDifficult: todayEntry.whatWasDifficult,
+      intentionForTomorrow: todayEntry.intentionForTomorrow,
+    });
+  }, [todayEntry?.id]);
 
   const handleSave = () => {
     const entry = {
@@ -57,6 +72,7 @@ export default function EmotionalJournalPage() {
       setEmotions([entry, ...emotions]);
     }
     setIsFormOpen(false);
+    setSavedMessage("Ton entrée a bien été enregistrée et synchronisée.");
   };
 
   return (
@@ -134,6 +150,7 @@ export default function EmotionalJournalPage() {
             <Button className="w-full" onClick={handleSave} data-testid="button-save-emotion">
               Enregistrer
             </Button>
+            {savedMessage && <p className="text-sm text-primary text-center">{savedMessage}</p>}
           </CardContent>
         )}
       </Card>
@@ -156,14 +173,33 @@ export default function EmotionalJournalPage() {
                       <span>Énergie {entry.energy}/10</span>
                     </div>
                   </div>
-                  {entry.gratitude && (
-                    <p className="text-sm text-muted-foreground italic">"{entry.gratitude}"</p>
-                  )}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1"><Heart className="h-3.5 w-3.5" /> Humeur {entry.mood}/10</span>
+                    <span className="flex items-center gap-1"><Moon className="h-3.5 w-3.5" /> Sommeil {entry.sleepQuality}/10</span>
+                    <span className="flex items-center gap-1"><Sun className="h-3.5 w-3.5" /> Énergie {entry.energy}/10</span>
+                    <span>Anxiété {entry.anxiety}/10</span>
+                  </div>
+                  {entry.gratitude && <HistoryText icon={Sparkles} label="Gratitude" text={entry.gratitude} />}
+                  {entry.whatHelped && <HistoryText label="Ce qui m'a aidé" text={entry.whatHelped} />}
+                  {entry.whatWasDifficult && <HistoryText label="Ce qui a été difficile" text={entry.whatWasDifficult} />}
+                  {entry.intentionForTomorrow && <HistoryText label="Intention pour demain" text={entry.intentionForTomorrow} />}
                 </CardContent>
               </Card>
             ))
         )}
       </div>
+    </div>
+  );
+}
+
+function HistoryText({ label, text, icon: Icon }: { label: string; text: string; icon?: typeof Sparkles }) {
+  return (
+    <div className="rounded-md bg-muted/40 p-3">
+      <p className="text-xs font-medium text-foreground flex items-center gap-1.5">
+        {Icon && <Icon className="h-3.5 w-3.5 text-primary" />}
+        {label}
+      </p>
+      <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">{text}</p>
     </div>
   );
 }

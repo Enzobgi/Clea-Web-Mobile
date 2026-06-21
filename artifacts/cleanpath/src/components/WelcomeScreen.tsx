@@ -4,7 +4,7 @@ import { useUser } from "@/store/UserContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowRight, LockKeyhole } from "lucide-react";
+import { ArrowRight, Eye, LockKeyhole } from "lucide-react";
 
 export function WelcomeScreen() {
   const { login, register } = useUser();
@@ -118,6 +118,14 @@ export function WelcomeScreen() {
             {busy ? "Un instant..." : mode === "login" ? "Se connecter" : "Créer mon compte"}
             {!busy && <ArrowRight className="ml-2 h-4 w-4" />}
           </Button>
+          <a
+            href="/demo"
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            data-testid="link-demo"
+          >
+            <Eye className="h-4 w-4" />
+            Consulter la démo
+          </a>
         </div>
 
         <p className="text-xs text-muted-foreground text-center leading-relaxed">

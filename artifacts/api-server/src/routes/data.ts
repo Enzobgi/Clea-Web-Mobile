@@ -1,12 +1,14 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db } from "@workspace/db";
+import { db, ensureDatabaseSchema } from "@workspace/db";
 import { userDataTable } from "@workspace/db/schema";
 import { getSessionUser } from "../lib/auth";
 
 const dataRouter: IRouter = Router();
 
 dataRouter.get("/data", async (req, res) => {
+  await ensureDatabaseSchema();
+
   const user = await getSessionUser(req);
   if (!user) {
     res.status(401).json({ error: "Non authentifié." });
@@ -23,6 +25,8 @@ dataRouter.get("/data", async (req, res) => {
 });
 
 dataRouter.put("/data", async (req, res) => {
+  await ensureDatabaseSchema();
+
   const user = await getSessionUser(req);
   if (!user) {
     res.status(401).json({ error: "Non authentifié." });

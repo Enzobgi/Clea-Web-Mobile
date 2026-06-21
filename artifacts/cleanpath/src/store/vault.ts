@@ -5,10 +5,15 @@ const SENSITIVE_SUFFIXES = [
   "_dayEntries",
   "_consumptions",
   "_emotions",
+  "_gratitudes",
   "_cravings",
   "_safetyPlan",
   "_contacts",
   "_goals",
+  "_profile",
+  "_weeklyGoals",
+  "_programProgress",
+  "_chatMemory",
 ] as const;
 
 export type VaultRecord = Record<string, unknown>;

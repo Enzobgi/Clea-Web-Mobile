@@ -3,6 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Wind, Heart, BookOpen, Lightbulb, Leaf } from "lucide-react";
+import { useAppStore } from "@/store/useAppStore";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 
 const QUOTES = [
   "La patience est la clé de la guérison. Sois doux avec toi-même aujourd'hui.",
@@ -133,8 +136,21 @@ function MeditationGuide() {
 }
 
 export default function ToolboxPage() {
+  const { gratitudes, setGratitudes } = useAppStore();
   const [quoteIdx, setQuoteIdx] = useState(() => Math.floor(Math.random() * QUOTES.length));
   const [gratitude, setGratitude] = useState("");
+  const [gratitudeSaved, setGratitudeSaved] = useState(false);
+
+  const saveGratitude = () => {
+    const text = gratitude.trim();
+    if (!text) return;
+    setGratitudes([
+      { id: Date.now().toString(), date: new Date().toISOString(), text },
+      ...gratitudes,
+    ]);
+    setGratitude("");
+    setGratitudeSaved(true);
+  };
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-500 pb-12">
@@ -221,6 +237,31 @@ export default function ToolboxPage() {
             className="min-h-[80px]"
             data-testid="textarea-gratitude-toolbox"
           />
+          <Button
+            className="w-full"
+            onClick={saveGratitude}
+            disabled={!gratitude.trim()}
+            data-testid="button-save-gratitude"
+          >
+            Enregistrer cette gratitude
+          </Button>
+          {gratitudeSaved && <p className="text-sm text-primary text-center">Gratitude enregistrée.</p>}
+          {gratitudes.length > 0 && (
+            <div className="pt-3 border-t border-border space-y-3">
+              <h3 className="text-sm font-medium">Historique des gratitudes</h3>
+              {gratitudes
+                .slice()
+                .sort((a, b) => b.date.localeCompare(a.date))
+                .map(entry => (
+                  <div key={entry.id} className="rounded-md bg-muted/40 p-3">
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date(entry.date), "d MMMM yyyy 'à' HH:mm", { locale: fr })}
+                    </p>
+                    <p className="text-sm mt-1 whitespace-pre-wrap">{entry.text}</p>
+                  </div>
+                ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

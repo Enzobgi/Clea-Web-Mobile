@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db } from "@workspace/db";
+import { db, ensureDatabaseSchema } from "@workspace/db";
 import { userDataTable, usersTable } from "@workspace/db/schema";
 import {
   createSession,
@@ -16,6 +16,8 @@ import {
 const authRouter: IRouter = Router();
 
 authRouter.post("/auth/register", async (req, res) => {
+  await ensureDatabaseSchema();
+
   const displayName = typeof req.body?.displayName === "string" ? req.body.displayName.trim() : "";
   const email = typeof req.body?.email === "string" ? normalizeEmail(req.body.email) : "";
   const password = typeof req.body?.password === "string" ? req.body.password : "";
@@ -63,6 +65,8 @@ authRouter.post("/auth/register", async (req, res) => {
 });
 
 authRouter.post("/auth/login", async (req, res) => {
+  await ensureDatabaseSchema();
+
   const email = typeof req.body?.email === "string" ? normalizeEmail(req.body.email) : "";
   const password = typeof req.body?.password === "string" ? req.body.password : "";
 
@@ -82,11 +86,15 @@ authRouter.post("/auth/login", async (req, res) => {
 });
 
 authRouter.post("/auth/logout", async (req, res) => {
+  await ensureDatabaseSchema();
+
   await destroySession(req, res);
   res.status(204).end();
 });
 
 authRouter.get("/auth/me", async (req, res) => {
+  await ensureDatabaseSchema();
+
   const user = await getSessionUser(req);
   if (!user) {
     res.status(401).json({ error: "Non authentifié." });

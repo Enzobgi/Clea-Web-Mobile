@@ -1,0 +1,18 @@
+{
+  "name": "CleanPath",
+  "short_name": "CleanPath",
+  "description": "Un espace privé pour suivre ses progrès et traverser les moments difficiles.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fbfaf7",
+  "theme_color": "#547d69",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

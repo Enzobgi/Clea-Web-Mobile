@@ -7,6 +7,9 @@ import { PinLock } from "@/components/PinLock";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { UserProvider, useUser } from "@/store/UserContext";
 import { VaultProvider } from "@/store/VaultContext";
+import { AppStoreProvider } from "@/store/useAppStore";
+import { useAppStore } from "@/store/useAppStore";
+import { OnboardingFlow } from "@/components/OnboardingFlow";
 import NotFound from "@/pages/not-found";
 
 import Home from "@/pages/Home";
@@ -20,6 +23,11 @@ import ContactsPage from "@/pages/ContactsPage";
 import GoalsPage from "@/pages/GoalsPage";
 import ToolboxPage from "@/pages/ToolboxPage";
 import SettingsPage from "@/pages/SettingsPage";
+import DemoPage from "@/pages/DemoPage";
+import JournalPage from "@/pages/JournalPage";
+import ProgramsPage from "@/pages/ProgramsPage";
+import ChatPage from "@/pages/ChatPage";
+import ProfilePage from "@/pages/ProfilePage";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +36,11 @@ function Router() {
     <AppLayout>
       <Switch>
         <Route path="/" component={Home} />
+        <Route path="/journal" component={JournalPage} />
+        <Route path="/sos" component={UrgencyPage} />
+        <Route path="/parcours" component={ProgramsPage} />
+        <Route path="/chat" component={ChatPage} />
+        <Route path="/profil" component={ProfilePage} />
         <Route path="/calendrier" component={CalendarPage} />
         <Route path="/journal-consommation" component={ConsumptionJournalPage} />
         <Route path="/journal-emotionnel" component={EmotionalJournalPage} />
@@ -44,8 +57,26 @@ function Router() {
   );
 }
 
+function AuthenticatedApp() {
+  const { profile } = useAppStore();
+  return (
+    <PinLock>
+      <>
+        {!profile.onboardingCompleted && <OnboardingFlow />}
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <Router />
+        </WouterRouter>
+      </>
+    </PinLock>
+  );
+}
+
 function AppContent() {
   const { currentUser, user, isLoading } = useUser();
+
+  if (window.location.pathname === "/demo") {
+    return <DemoPage />;
+  }
 
   if (isLoading) {
     return (
@@ -60,12 +91,10 @@ function AppContent() {
   }
 
   return (
-    <VaultProvider>
-      <PinLock key={user?.id}>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-      </PinLock>
+    <VaultProvider key={user?.id}>
+      <AppStoreProvider>
+        <AuthenticatedApp />
+      </AppStoreProvider>
     </VaultProvider>
   );
 }
