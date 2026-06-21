@@ -1,0 +1,262 @@
+import { randomUUID } from "node:crypto";
+import { Router, type IRouter, type Response } from "express";
+import { getSessionUser } from "../lib/auth";
+import { logger } from "../lib/logger";
+
+const chatRouter: IRouter = Router();
+
+const CHAT_MODES = new Set(["ecoute", "plan", "comprendre", "discussion", "envie"]);
+const MAX_MESSAGES = 20;
+const MAX_TOTAL_CHARACTERS = 12_000;
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 30;
+
+const rateLimits = new Map<string, number[]>();
+
+interface ChatTextPart {
+  type: string;
+  text?: string;
+}
+
+interface ChatMessage {
+  id?: string;
+  role?: string;
+  parts?: ChatTextPart[];
+}
+
+const MODE_INSTRUCTIONS: Record<string, string> = {
+  ecoute: "Écoute avec chaleur, reformule brièvement et pose une seule question utile à la fois.",
+  plan: "Aide à choisir une prochaine action petite, réaliste et située dans le temps.",
+  comprendre: "Aide à observer sans jugement les émotions, déclencheurs, habitudes et stratégies qui ont aidé.",
+  discussion: "Aide à préparer une conversation avec un proche ou un professionnel, avec des phrases simples et factuelles.",
+  envie: "Priorise les prochaines minutes: éloignement du risque, délai de dix minutes, respiration, changement de lieu et contact d'un proche.",
+};
+
+const LOCAL_RESPONSES: Record<string, string> = {
+  ecoute: "Je suis là. Prends ton temps pour décrire ce qui se passe, même en quelques mots. **Qu’est-ce qui serait le plus utile pour toi dans les dix prochaines minutes ?**",
+  plan: "On peut avancer très simplement :\n\n1. Décris le problème en une phrase.\n2. Choisis une action faisable en moins de dix minutes.\n3. Décide quand la faire et qui peut te soutenir.",
+  comprendre: "Regardons le moment sans jugement : **que s’est-il passé juste avant**, quelle émotion était présente, et qu’est-ce qui a aidé, même un peu ?",
+  discussion: "Tu peux préparer ton message en trois parties : **les faits**, **ce que tu ressens**, puis **ce dont tu as besoin**. Dis-moi à qui tu souhaites parler et je t’aide à le formuler.",
+  envie: "Pour les prochaines minutes : éloigne-toi si possible de ce qui est accessible, change de lieu, lance un minuteur de dix minutes et contacte une personne de confiance. **Es-tu actuellement en sécurité ?**",
+};
+
+const URGENT_RESPONSE = [
+  "Ta sécurité passe avant la conversation.",
+  "",
+  "**Appelle maintenant le 112** si tu risques de te faire du mal, si tu n’es pas en sécurité, si tu as pris une quantité dangereuse, ou si tu présentes des symptômes graves.",
+  "",
+  "Ne reste pas seul. Éloigne les produits ou objets dangereux si tu peux le faire sans risque, va vers une personne ou un lieu sûr, et demande à quelqu’un de rester avec toi.",
+  "",
+  "Tu peux aussi ouvrir le **mode SOS** de CleanPath pendant que tu contactes de l’aide.",
+].join("\n");
+
+function messageText(message: ChatMessage): string {
+  return (message.parts ?? [])
+    .filter(part => part.type === "text" && typeof part.text === "string")
+    .map(part => part.text ?? "")
+    .join("");
+}
+
+function isUrgent(text: string): boolean {
+  return [
+    /\b(suicide|suicidaire|me tuer|mettre fin à mes jours)\b/i,
+    /\b(pas en sécurité|danger immédiat|vais faire du mal|faire du mal à quelqu'un)\b/i,
+    /\b(overdose|surdose|dose mortelle|trop pris|trop consommé)\b/i,
+    /\b(convulsion|difficulté à respirer|ne respire plus|perte de connaissance|délirium)\b/i,
+  ].some(pattern => pattern.test(text));
+}
+
+function isRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const recent = (rateLimits.get(userId) ?? []).filter(
+    timestamp => now - timestamp < RATE_LIMIT_WINDOW_MS,
+  );
+  if (recent.length >= RATE_LIMIT_MAX_REQUESTS) {
+    rateLimits.set(userId, recent);
+    return true;
+  }
+  recent.push(now);
+  rateLimits.set(userId, recent);
+  return false;
+}
+
+function prepareStream(res: Response) {
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Vercel-AI-UI-Message-Stream", "v1");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+}
+
+function writePart(res: Response, part: Record<string, unknown>) {
+  res.write(`data: ${JSON.stringify(part)}\n\n`);
+}
+
+function pipeFixedMessage(res: Response, text: string) {
+  prepareStream(res);
+  const messageId = randomUUID();
+  const textId = randomUUID();
+  writePart(res, { type: "start", messageId });
+  writePart(res, { type: "start-step" });
+  writePart(res, { type: "text-start", id: textId });
+  writePart(res, { type: "text-delta", id: textId, delta: text });
+  writePart(res, { type: "text-end", id: textId });
+  writePart(res, { type: "finish-step" });
+  writePart(res, { type: "finish" });
+  res.end("data: [DONE]\n\n");
+}
+
+chatRouter.post("/chat", async (req, res) => {
+  const user = await getSessionUser(req);
+  if (!user) {
+    res.status(401).json({ error: "Connecte-toi pour utiliser le chat." });
+    return;
+  }
+
+  if (isRateLimited(user.id)) {
+    res.status(429).json({ error: "Trop de messages ont été envoyés. Réessaie dans quelques minutes." });
+    return;
+  }
+
+  const mode = typeof req.body?.mode === "string" && CHAT_MODES.has(req.body.mode)
+    ? req.body.mode
+    : "ecoute";
+  const rawMessages = Array.isArray(req.body?.messages) ? req.body.messages : [];
+  const messages = rawMessages.slice(-MAX_MESSAGES) as ChatMessage[];
+
+  if (messages.length === 0) {
+    res.status(400).json({ error: "Le message est vide." });
+    return;
+  }
+
+  const totalCharacters = messages.reduce((total, message) => {
+    if (!message || !Array.isArray(message.parts)) return total;
+    return total + messageText(message).length;
+  }, 0);
+  if (totalCharacters > MAX_TOTAL_CHARACTERS) {
+    res.status(413).json({ error: "La conversation est trop longue. Efface-la pour en commencer une nouvelle." });
+    return;
+  }
+
+  const latestUserMessage = [...messages].reverse().find(message => message.role === "user");
+  const latestText = latestUserMessage ? messageText(latestUserMessage) : "";
+
+  if (isUrgent(latestText)) {
+    pipeFixedMessage(res, URGENT_RESPONSE);
+    return;
+  }
+
+  if (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL_OIDC_TOKEN) {
+    pipeFixedMessage(res, LOCAL_RESPONSES[mode]);
+    return;
+  }
+
+  try {
+    const apiKey = process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN;
+    const systemPrompt = [
+        "Tu es l'assistant de soutien de CleanPath, une application francophone de réduction ou d'arrêt des consommations.",
+        "Réponds en français, avec chaleur, sans jugement, en 2 à 5 courts paragraphes ou étapes.",
+        "Tu aides à traverser une envie, clarifier une émotion, préparer une action ou demander du soutien.",
+        "Tu ne poses aucun diagnostic, ne remplaces pas un médecin ou un thérapeute et ne donnes pas de protocole médical, de dosage ou de conseil de sevrage personnalisé.",
+        "Si la personne évoque un danger immédiat, une overdose, des symptômes graves, une intention suicidaire ou l'impossibilité de rester en sécurité, dis clairement d'appeler le 112 et de ne pas rester seule.",
+        "Pour une forte envie sans danger immédiat, commence par vérifier la sécurité, puis propose une seule petite action concrète pour les dix prochaines minutes.",
+        "Évite les longs avertissements répétitifs. Ne prétends jamais avoir contacté un proche ou les secours.",
+        `Mode choisi: ${mode}. ${MODE_INSTRUCTIONS[mode]}`,
+      ].join("\n");
+    const upstreamMessages = messages
+      .filter(message => message.role === "user" || message.role === "assistant")
+      .map(message => ({
+        role: message.role,
+        content: messageText(message),
+      }))
+      .filter(message => message.content.trim());
+
+    const controller = new AbortController();
+    res.on("close", () => controller.abort());
+    const upstream = await fetch("https://ai-gateway.vercel.sh/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "http-referer": process.env.APP_ORIGIN || "https://cleanpath-web.vercel.app",
+        "x-title": "CleanPath",
+      },
+      body: JSON.stringify({
+        model: process.env.CLEANPATH_AI_MODEL || "openai/gpt-5.4",
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...upstreamMessages,
+        ],
+        stream: true,
+        max_completion_tokens: 500,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!upstream.ok || !upstream.body) {
+      const details = await upstream.text().catch(() => "");
+      logger.error({
+        status: upstream.status,
+        details: details.slice(0, 500),
+        userId: user.id,
+      }, "AI Gateway request failed");
+      pipeFixedMessage(res, LOCAL_RESPONSES[mode]);
+      return;
+    }
+
+    prepareStream(res);
+    const messageId = randomUUID();
+    const textId = randomUUID();
+    writePart(res, { type: "start", messageId });
+    writePart(res, { type: "start-step" });
+    writePart(res, { type: "text-start", id: textId });
+
+    const reader = upstream.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let finished = false;
+
+    while (!finished) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const data = trimmed.slice(5).trim();
+        if (data === "[DONE]") {
+          finished = true;
+          break;
+        }
+        try {
+          const chunk = JSON.parse(data) as {
+            choices?: Array<{ delta?: { content?: string } }>;
+          };
+          const delta = chunk.choices?.[0]?.delta?.content;
+          if (delta) writePart(res, { type: "text-delta", id: textId, delta });
+        } catch {
+          // Ignore malformed or provider-specific non-text chunks.
+        }
+      }
+    }
+
+    writePart(res, { type: "text-end", id: textId });
+    writePart(res, { type: "finish-step" });
+    writePart(res, { type: "finish" });
+    res.end("data: [DONE]\n\n");
+  } catch (error) {
+    logger.error({ error, userId: user.id }, "AI chat request failed");
+    if (!res.headersSent) {
+      pipeFixedMessage(res, LOCAL_RESPONSES[mode]);
+    } else if (!res.writableEnded) {
+      res.end("data: [DONE]\n\n");
+    }
+  }
+});
+
+export default chatRouter;

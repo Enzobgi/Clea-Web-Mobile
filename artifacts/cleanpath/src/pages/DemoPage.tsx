@@ -441,14 +441,18 @@ export default function DemoPage() {
         </section>
 
         <section id="chat" className="scroll-mt-24 space-y-4">
-          <div className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-primary" /><h2 className="text-xl font-medium">Chat d'accompagnement</h2></div>
+          <div className="flex flex-wrap items-center gap-2"><MessageCircle className="h-5 w-5 text-primary" /><h2 className="text-xl font-medium">Chat d'accompagnement</h2><span className="rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">Assistant IA</span></div>
           <div className="flex flex-wrap gap-2">
-            {["Écoute", "Plan d'action", "Comprendre", "Préparer une discussion", "Faire face à une envie"].map((mode, index) => <span key={mode} className={`rounded-md border px-3 py-2 text-sm ${index === 1 ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>{mode}</span>)}
+            {["Écoute", "Envie forte", "Plan d'action", "Comprendre", "Préparer une discussion"].map((mode, index) => <span key={mode} className={`rounded-md border px-3 py-2 text-sm ${index === 1 ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>{mode}</span>)}
           </div>
           <Card><CardContent className="space-y-3 p-5">
-            <p className="font-medium">Construisons une prochaine étape</p>
-            {["Décrire le problème en une phrase.", "Choisir une action petite et réalisable.", "Décider quand et avec quel soutien la faire."].map((step, index) => <div key={step} className="flex gap-3 rounded-md bg-muted/40 p-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">{index + 1}</span><p className="text-sm">{step}</p></div>)}
-            <div className="flex flex-wrap gap-2 pt-2">{["Je veux parler", "J'ai une envie forte", "Je me sens anxieux", "Je veux demander de l'aide"].map(text => <span key={text} className="rounded-full bg-primary/10 px-3 py-1.5 text-xs text-primary">{text}</span>)}</div>
+            <div className="ml-auto max-w-[85%] rounded-lg bg-secondary px-4 py-3 text-sm">J'ai une envie forte en rentrant du travail.</div>
+            <div className="max-w-[90%] space-y-2 text-sm">
+              <p>Tu as bien fait de venir en parler. D'abord, <strong>es-tu actuellement en sécurité</strong> et peux-tu t'éloigner de ce qui est accessible ?</p>
+              <p>Pour les dix prochaines minutes, change de lieu, prends une boisson sans alcool et envoie un message à Sophie. L'envie peut monter puis redescendre sans que tu aies à agir.</p>
+            </div>
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs">En cas de danger immédiat, d'overdose ou de symptômes graves, le chat indique clairement d'appeler le 112 et de ne pas rester seul.</div>
+            <div className="flex flex-wrap gap-2 pt-2">{["Aide-moi pendant dix minutes", "Je veux contacter un proche", "Ouvrir le mode SOS"].map(text => <span key={text} className="rounded-full bg-primary/10 px-3 py-1.5 text-xs text-primary">{text}</span>)}</div>
           </CardContent></Card>
         </section>
 
