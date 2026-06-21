@@ -207,7 +207,7 @@ chatRouter.post("/chat", async (req, res) => {
         "x-title": "CleanPath",
       },
       body: JSON.stringify({
-        model: process.env.CLEANPATH_AI_MODEL || "openai/gpt-5.4",
+        model: process.env.CLEANPATH_AI_MODEL || "zai/glm-4.6v-flash",
         messages: [
           { role: "system", content: systemPrompt },
           ...upstreamMessages,
