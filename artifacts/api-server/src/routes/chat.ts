@@ -32,13 +32,36 @@ const MODE_INSTRUCTIONS: Record<string, string> = {
   envie: "Priorise les prochaines minutes: éloignement du risque, délai de dix minutes, respiration, changement de lieu et contact d'un proche.",
 };
 
-const LOCAL_RESPONSES: Record<string, string> = {
-  ecoute: "Je suis là. Prends ton temps pour décrire ce qui se passe, même en quelques mots. **Qu’est-ce qui serait le plus utile pour toi dans les dix prochaines minutes ?**",
-  plan: "On peut avancer très simplement :\n\n1. Décris le problème en une phrase.\n2. Choisis une action faisable en moins de dix minutes.\n3. Décide quand la faire et qui peut te soutenir.",
-  comprendre: "Regardons le moment sans jugement : **que s’est-il passé juste avant**, quelle émotion était présente, et qu’est-ce qui a aidé, même un peu ?",
-  discussion: "Tu peux préparer ton message en trois parties : **les faits**, **ce que tu ressens**, puis **ce dont tu as besoin**. Dis-moi à qui tu souhaites parler et je t’aide à le formuler.",
-  envie: "Pour les prochaines minutes : éloigne-toi si possible de ce qui est accessible, change de lieu, lance un minuteur de dix minutes et contacte une personne de confiance. **Es-tu actuellement en sécurité ?**",
-};
+function localResponse(mode: string, text: string): string {
+  const normalized = text.toLowerCase();
+
+  if (mode === "envie") {
+    if (/\b(seul|seule|personne)\b/.test(normalized)) {
+      return "Ne reste pas isolé avec cette envie. **Peux-tu envoyer maintenant un message très court à une personne de confiance**, par exemple : « J’ai un moment difficile, peux-tu rester avec moi dix minutes ? »";
+    }
+    if (/\b(travail|bureau|collègue)\b/.test(normalized)) {
+      return "Le retour du travail semble être un moment sensible. Pour les dix prochaines minutes, **change de trajet ou de pièce**, prends une boisson sans alcool et lance le minuteur SOS. Est-ce que ce qui déclenche l’envie est encore accessible ?";
+    }
+    return "Commençons par les prochaines minutes : éloigne-toi de ce qui est accessible, change de lieu et lance un minuteur de dix minutes. **Es-tu actuellement en sécurité ?**";
+  }
+
+  if (/\b(anxieux|anxieuse|angoisse|stress|stressé|stressée)\b/.test(normalized)) {
+    return "Je t’entends. Sans chercher à tout résoudre maintenant, essaie une expiration lente pendant une minute puis pose les pieds au sol. **Qu’est-ce qui alimente le plus cette tension en ce moment ?**";
+  }
+  if (/\b(dormir|sommeil|fatigué|fatiguée|épuisé|épuisée)\b/.test(normalized)) {
+    return "La fatigue peut rendre les envies et les émotions plus difficiles à traverser. Choisis une seule action douce pour ce soir : boire de l’eau, réduire les stimulations ou préparer ton coucher. **Laquelle te paraît la plus réaliste ?**";
+  }
+  if (mode === "plan") {
+    return "Transformons cela en une étape faisable : choisis une action de moins de dix minutes, fixe le moment où tu la feras et décide qui peut te soutenir. **Quelle petite action veux-tu retenir ?**";
+  }
+  if (mode === "comprendre") {
+    return "Regardons ce moment sans jugement : que s’est-il passé juste avant, quelle émotion était présente, et qu’est-ce qui a aidé, même un peu ?";
+  }
+  if (mode === "discussion") {
+    return "Prépare ton message en trois parties : **les faits**, **ce que tu ressens**, puis **ce dont tu as besoin**. À qui souhaites-tu parler ?";
+  }
+  return "Je suis là. Tu n’as pas besoin de tout résoudre d’un coup. **Quelle serait la chose la plus utile pour toi dans les dix prochaines minutes ?**";
+}
 
 const URGENT_RESPONSE = [
   "Ta sécurité passe avant la conversation.",
@@ -149,7 +172,7 @@ chatRouter.post("/chat", async (req, res) => {
   }
 
   if (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL_OIDC_TOKEN) {
-    pipeFixedMessage(res, LOCAL_RESPONSES[mode]);
+    pipeFixedMessage(res, localResponse(mode, latestText));
     return;
   }
 
@@ -202,7 +225,7 @@ chatRouter.post("/chat", async (req, res) => {
         details: details.slice(0, 500),
         userId: user.id,
       }, "AI Gateway request failed");
-      pipeFixedMessage(res, LOCAL_RESPONSES[mode]);
+      pipeFixedMessage(res, localResponse(mode, latestText));
       return;
     }
 
@@ -252,7 +275,7 @@ chatRouter.post("/chat", async (req, res) => {
   } catch (error) {
     logger.error({ error, userId: user.id }, "AI chat request failed");
     if (!res.headersSent) {
-      pipeFixedMessage(res, LOCAL_RESPONSES[mode]);
+      pipeFixedMessage(res, localResponse(mode, latestText));
     } else if (!res.writableEnded) {
       res.end("data: [DONE]\n\n");
     }
