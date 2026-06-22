@@ -284,11 +284,18 @@ export default function ChatPage() {
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          {settings.chatMemoryEnabled
-            ? "La conversation est mémorisée et synchronisée avec ton compte."
-            : "La mémoire du chat est désactivée dans les paramètres."}
-        </p>
+        <div className="space-y-1 text-xs text-muted-foreground">
+          <p>
+            {settings.chatMemoryEnabled
+              ? "La conversation est mémorisée et synchronisée avec ton compte."
+              : "La mémoire du chat est désactivée dans les paramètres."}
+          </p>
+          <p>
+            {settings.chatStatsEnabled
+              ? "Gemini peut utiliser un résumé chiffré, jamais tes notes, gratitudes ou entrées complètes."
+              : "La personnalisation par les statistiques est désactivée dans les paramètres."}
+          </p>
+        </div>
         <Button type="button" variant="ghost" size="sm" onClick={clearConversation}>
           <Trash2 className="mr-2 h-4 w-4" />
           Effacer la conversation

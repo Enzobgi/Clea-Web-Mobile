@@ -208,6 +208,19 @@ export default function SettingsPage() {
               Supprimer la mémoire du chat
             </Button>
           )}
+
+          <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
+            <div className="space-y-0.5">
+              <Label>Statistiques dans le chat</Label>
+              <p className="text-sm text-muted-foreground">
+                Autorise Gemini à utiliser un résumé chiffré, sans envoyer tes notes, gratitudes ou entrées complètes.
+              </p>
+            </div>
+            <Switch
+              checked={settings.chatStatsEnabled}
+              onCheckedChange={chatStatsEnabled => setSettings({ ...settings, chatStatsEnabled })}
+            />
+          </div>
         </CardContent>
       </Card>
 

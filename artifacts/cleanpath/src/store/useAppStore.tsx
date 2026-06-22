@@ -100,6 +100,7 @@ export interface AppSettings {
   costPerDay: number;
   reminderSettings: { [key: string]: boolean };
   chatMemoryEnabled: boolean;
+  chatStatsEnabled: boolean;
 }
 
 const defaultSettings: AppSettings = {
@@ -107,6 +108,7 @@ const defaultSettings: AppSettings = {
   costPerDay: 15,
   reminderSettings: {},
   chatMemoryEnabled: false,
+  chatStatsEnabled: true,
 };
 
 const defaultProfile: UserProfile = {
