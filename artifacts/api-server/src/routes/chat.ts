@@ -169,7 +169,10 @@ async function requestGemini(messages: ChatMessage[], mode: string): Promise<str
           }))
           .filter(content => content.parts[0].text.trim()),
         generationConfig: {
-          maxOutputTokens: 500,
+          maxOutputTokens: 900,
+          thinkingConfig: {
+            thinkingBudget: 0,
+          },
         },
       }),
     },
