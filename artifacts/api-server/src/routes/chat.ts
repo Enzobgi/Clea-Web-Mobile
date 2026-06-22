@@ -131,6 +131,71 @@ function pipeFixedMessage(res: Response, text: string) {
   res.end("data: [DONE]\n\n");
 }
 
+function systemPromptFor(mode: string): string {
+  return [
+    "Tu es l'assistant de soutien de CleanPath, une application francophone de réduction ou d'arrêt des consommations.",
+    "Réponds en français, avec chaleur, sans jugement, en 2 à 5 courts paragraphes ou étapes.",
+    "Tu aides à traverser une envie, clarifier une émotion, préparer une action ou demander du soutien.",
+    "Tu ne poses aucun diagnostic, ne remplaces pas un médecin ou un thérapeute et ne donnes pas de protocole médical, de dosage ou de conseil de sevrage personnalisé.",
+    "Si la personne évoque un danger immédiat, une overdose, des symptômes graves, une intention suicidaire ou l'impossibilité de rester en sécurité, dis clairement d'appeler le 112 et de ne pas rester seule.",
+    "Pour une forte envie sans danger immédiat, commence par vérifier la sécurité, puis propose une seule petite action concrète pour les dix prochaines minutes.",
+    "Évite les longs avertissements répétitifs. Ne prétends jamais avoir contacté un proche ou les secours.",
+    `Mode choisi: ${mode}. ${MODE_INSTRUCTIONS[mode]}`,
+  ].join("\n");
+}
+
+async function requestGemini(messages: ChatMessage[], mode: string): Promise<string | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        system_instruction: {
+          parts: [{ text: systemPromptFor(mode) }],
+        },
+        contents: messages
+          .filter(message => message.role === "user" || message.role === "assistant")
+          .map(message => ({
+            role: message.role === "assistant" ? "model" : "user",
+            parts: [{ text: messageText(message) }],
+          }))
+          .filter(content => content.parts[0].text.trim()),
+        generationConfig: {
+          maxOutputTokens: 500,
+        },
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    logger.error({
+      status: response.status,
+      details: details.slice(0, 500),
+    }, "Gemini request failed");
+    return null;
+  }
+
+  const data = await response.json() as {
+    candidates?: Array<{
+      content?: { parts?: Array<{ text?: string }> };
+    }>;
+  };
+  const text = data.candidates?.[0]?.content?.parts
+    ?.map(part => part.text ?? "")
+    .join("")
+    .trim();
+  return text || null;
+}
+
 chatRouter.post("/chat", async (req, res) => {
   const user = await getSessionUser(req);
   if (!user) {
@@ -171,6 +236,18 @@ chatRouter.post("/chat", async (req, res) => {
     return;
   }
 
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const geminiText = await requestGemini(messages, mode);
+      if (geminiText) {
+        pipeFixedMessage(res, geminiText);
+        return;
+      }
+    } catch (error) {
+      logger.error({ error, userId: user.id }, "Gemini chat request failed");
+    }
+  }
+
   if (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL_OIDC_TOKEN) {
     pipeFixedMessage(res, localResponse(mode, latestText));
     return;
@@ -178,16 +255,6 @@ chatRouter.post("/chat", async (req, res) => {
 
   try {
     const apiKey = process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN;
-    const systemPrompt = [
-        "Tu es l'assistant de soutien de CleanPath, une application francophone de réduction ou d'arrêt des consommations.",
-        "Réponds en français, avec chaleur, sans jugement, en 2 à 5 courts paragraphes ou étapes.",
-        "Tu aides à traverser une envie, clarifier une émotion, préparer une action ou demander du soutien.",
-        "Tu ne poses aucun diagnostic, ne remplaces pas un médecin ou un thérapeute et ne donnes pas de protocole médical, de dosage ou de conseil de sevrage personnalisé.",
-        "Si la personne évoque un danger immédiat, une overdose, des symptômes graves, une intention suicidaire ou l'impossibilité de rester en sécurité, dis clairement d'appeler le 112 et de ne pas rester seule.",
-        "Pour une forte envie sans danger immédiat, commence par vérifier la sécurité, puis propose une seule petite action concrète pour les dix prochaines minutes.",
-        "Évite les longs avertissements répétitifs. Ne prétends jamais avoir contacté un proche ou les secours.",
-        `Mode choisi: ${mode}. ${MODE_INSTRUCTIONS[mode]}`,
-      ].join("\n");
     const upstreamMessages = messages
       .filter(message => message.role === "user" || message.role === "assistant")
       .map(message => ({
@@ -209,7 +276,7 @@ chatRouter.post("/chat", async (req, res) => {
       body: JSON.stringify({
         model: process.env.CLEANPATH_AI_MODEL || "zai/glm-4.6v-flash",
         messages: [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: systemPromptFor(mode) },
           ...upstreamMessages,
         ],
         stream: true,
