@@ -46,6 +46,7 @@ export interface ConsumptionEntry {
 export interface EmotionalEntry {
   id: string;
   date: string;
+  createdAt?: string;
   mood: number;
   anxiety: number;
   sleepQuality: number;
