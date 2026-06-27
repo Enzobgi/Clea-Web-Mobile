@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ChevronDown, ChevronUp, Heart, Moon, Sparkles, Sun } from "lucide-react";
+import { ChevronDown, ChevronUp, Heart, Moon, Pencil, Sparkles, Sun } from "lucide-react";
 
-function ScoreSlider({ label, value, onChange, color = "primary" }: { label: string; value: number; onChange: (v: number) => void; color?: string }) {
+function ScoreSlider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
   const labels = ["", "Très bas", "Bas", "Faible", "Médiocre", "Moyen", "Correct", "Bien", "Très bien", "Excellent", "Parfait"];
   return (
     <div className="space-y-3">
@@ -31,77 +33,128 @@ function ScoreSlider({ label, value, onChange, color = "primary" }: { label: str
 export default function EmotionalJournalPage() {
   const { emotions, setEmotions } = useAppStore();
   const today = format(new Date(), "yyyy-MM-dd");
-  const todayEntry = emotions.find(e => e.date === today);
+  const [selectedDate, setSelectedDate] = useState(today);
+  const selectedEntry = emotions.find(e => e.date === selectedDate);
+  const isPastDate = selectedDate < today;
+  const showRetrospectiveTag = selectedEntry?.createdAt
+    ? selectedEntry.createdAt > selectedEntry.date
+    : !selectedEntry && isPastDate;
 
-  const [isFormOpen, setIsFormOpen] = useState(!todayEntry);
+  const [isFormOpen, setIsFormOpen] = useState(!selectedEntry);
   const [form, setForm] = useState({
-    mood: todayEntry?.mood ?? 5,
-    anxiety: todayEntry?.anxiety ?? 5,
-    sleepQuality: todayEntry?.sleepQuality ?? 5,
-    energy: todayEntry?.energy ?? 5,
-    gratitude: todayEntry?.gratitude ?? "",
-    whatHelped: todayEntry?.whatHelped ?? "",
-    whatWasDifficult: todayEntry?.whatWasDifficult ?? "",
-    intentionForTomorrow: todayEntry?.intentionForTomorrow ?? "",
+    mood: selectedEntry?.mood ?? 5,
+    anxiety: selectedEntry?.anxiety ?? 5,
+    sleepQuality: selectedEntry?.sleepQuality ?? 5,
+    energy: selectedEntry?.energy ?? 5,
+    gratitude: selectedEntry?.gratitude ?? "",
+    whatHelped: selectedEntry?.whatHelped ?? "",
+    whatWasDifficult: selectedEntry?.whatWasDifficult ?? "",
+    intentionForTomorrow: selectedEntry?.intentionForTomorrow ?? "",
   });
   const [savedMessage, setSavedMessage] = useState("");
 
   useEffect(() => {
-    if (!todayEntry) return;
+    setSavedMessage("");
+    setIsFormOpen(!selectedEntry);
+    if (!selectedEntry) {
+      setForm({
+        mood: 5,
+        anxiety: 5,
+        sleepQuality: 5,
+        energy: 5,
+        gratitude: "",
+        whatHelped: "",
+        whatWasDifficult: "",
+        intentionForTomorrow: "",
+      });
+      return;
+    }
     setForm({
-      mood: todayEntry.mood,
-      anxiety: todayEntry.anxiety,
-      sleepQuality: todayEntry.sleepQuality,
-      energy: todayEntry.energy,
-      gratitude: todayEntry.gratitude,
-      whatHelped: todayEntry.whatHelped,
-      whatWasDifficult: todayEntry.whatWasDifficult,
-      intentionForTomorrow: todayEntry.intentionForTomorrow,
+      mood: selectedEntry.mood,
+      anxiety: selectedEntry.anxiety,
+      sleepQuality: selectedEntry.sleepQuality,
+      energy: selectedEntry.energy,
+      gratitude: selectedEntry.gratitude,
+      whatHelped: selectedEntry.whatHelped,
+      whatWasDifficult: selectedEntry.whatWasDifficult,
+      intentionForTomorrow: selectedEntry.intentionForTomorrow,
     });
-  }, [todayEntry?.id]);
+  }, [selectedDate, selectedEntry]);
 
   const handleSave = () => {
     const entry = {
-      id: todayEntry?.id ?? Date.now().toString(),
-      date: today,
+      id: selectedEntry?.id ?? Date.now().toString(),
+      date: selectedDate,
+      createdAt: selectedEntry?.createdAt ?? (selectedEntry ? undefined : today),
       ...form,
     };
-    if (todayEntry) {
-      setEmotions(emotions.map(e => e.date === today ? entry : e));
+    if (selectedEntry) {
+      setEmotions(emotions.map(e => e.date === selectedDate ? entry : e));
     } else {
       setEmotions([entry, ...emotions]);
     }
     setIsFormOpen(false);
-    setSavedMessage("Ton entrée a bien été enregistrée et synchronisée.");
+    setSavedMessage(
+      !selectedEntry && isPastDate
+        ? "Ton entrée a été enregistrée et marquée comme ajoutée après coup."
+        : "Ton entrée a bien été enregistrée et synchronisée."
+    );
+  };
+
+  const openEntryFromHistory = (date: string) => {
+    setSelectedDate(date);
+    setIsFormOpen(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-500 pb-12">
       <header className="space-y-1">
         <h1 className="text-2xl font-medium text-foreground">Journal émotionnel</h1>
-        <p className="text-muted-foreground">Comment te sens-tu aujourd'hui ?</p>
+        <p className="text-muted-foreground">Consulte, complète ou corrige une entrée à la date concernée.</p>
       </header>
 
-      <Card className={todayEntry && !isFormOpen ? "border-primary/30 bg-primary/5" : ""}>
+      <Card className={selectedEntry && !isFormOpen ? "border-primary/30 bg-primary/5" : ""}>
         <CardHeader
           className="cursor-pointer select-none"
           onClick={() => setIsFormOpen(v => !v)}
         >
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">
-              {todayEntry ? "Entrée d'aujourd'hui" : "Remplir l'entrée du jour"}
-            </CardTitle>
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle className="text-lg">
+                {selectedEntry ? "Entrée sélectionnée" : "Nouvelle entrée émotionnelle"}
+              </CardTitle>
+              <p className="text-sm text-muted-foreground capitalize">
+                {format(new Date(`${selectedDate}T00:00:00`), "EEEE d MMMM yyyy", { locale: fr })}
+              </p>
+            </div>
             {isFormOpen ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}
           </div>
-          {todayEntry && !isFormOpen && (
+          {selectedEntry && !isFormOpen && (
             <p className="text-sm text-muted-foreground mt-1">
-              Humeur : {todayEntry.mood}/10 · Anxiété : {todayEntry.anxiety}/10 · Énergie : {todayEntry.energy}/10
+              Humeur : {selectedEntry.mood}/10 · Anxiété : {selectedEntry.anxiety}/10 · Énergie : {selectedEntry.energy}/10
             </p>
           )}
         </CardHeader>
 
         {isFormOpen && (
           <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label>Date concernée</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="date"
+                  value={selectedDate}
+                  onChange={e => setSelectedDate(e.target.value)}
+                  data-testid="input-emotion-date"
+                />
+                {showRetrospectiveTag && (
+                  <Badge variant="secondary" className="shrink-0">
+                    Ajouté après coup
+                  </Badge>
+                )}
+              </div>
+            </div>
             <ScoreSlider label="Humeur générale" value={form.mood} onChange={v => setForm(f => ({ ...f, mood: v }))} />
             <ScoreSlider label="Niveau d'anxiété" value={form.anxiety} onChange={v => setForm(f => ({ ...f, anxiety: v }))} />
             <ScoreSlider label="Qualité du sommeil" value={form.sleepQuality} onChange={v => setForm(f => ({ ...f, sleepQuality: v }))} />
@@ -148,7 +201,7 @@ export default function EmotionalJournalPage() {
               />
             </div>
             <Button className="w-full" onClick={handleSave} data-testid="button-save-emotion">
-              Enregistrer
+              {selectedEntry ? "Mettre à jour l'entrée" : "Enregistrer l'entrée"}
             </Button>
             {savedMessage && <p className="text-sm text-primary text-center">{savedMessage}</p>}
           </CardContent>
@@ -166,12 +219,28 @@ export default function EmotionalJournalPage() {
             .map(entry => (
               <Card key={entry.id}>
                 <CardContent className="p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium capitalize">{format(new Date(entry.date), "EEEE d MMMM", { locale: fr })}</p>
-                    <div className="flex gap-3 text-sm text-muted-foreground">
-                      <span>Humeur {entry.mood}/10</span>
-                      <span>Énergie {entry.energy}/10</span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium capitalize">{format(new Date(`${entry.date}T00:00:00`), "EEEE d MMMM", { locale: fr })}</p>
+                        {entry.createdAt && entry.createdAt > entry.date && (
+                          <Badge variant="secondary">Ajouté après coup</Badge>
+                        )}
+                      </div>
+                      <div className="mt-1 flex gap-3 text-sm text-muted-foreground">
+                        <span>Humeur {entry.mood}/10</span>
+                        <span>Énergie {entry.energy}/10</span>
+                      </div>
                     </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 gap-2"
+                      onClick={() => openEntryFromHistory(entry.date)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Modifier
+                    </Button>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1"><Heart className="h-3.5 w-3.5" /> Humeur {entry.mood}/10</span>
