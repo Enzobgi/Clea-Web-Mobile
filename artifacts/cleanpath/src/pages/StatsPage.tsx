@@ -29,13 +29,22 @@ const tooltipStyle = {
   borderRadius: "6px",
 };
 
-function average(entries: EmotionalEntry[], field: keyof Pick<EmotionalEntry, "mood" | "anxiety" | "sleepQuality" | "energy">) {
-  if (entries.length === 0) return null;
-  return entries.reduce((sum, entry) => sum + entry[field], 0) / entries.length;
+type EmotionalNumericField = "mood" | "anxiety" | "sleepQuality" | "energy" | "treatmentAdherence" | "physicalActivityMinutes";
+
+function average(entries: EmotionalEntry[], field: EmotionalNumericField) {
+  const values = entries
+    .map(entry => entry[field])
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (values.length === 0) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 function formatScore(value: number | null) {
   return value === null ? "—" : `${value.toFixed(1).replace(".", ",")} / 10`;
+}
+
+function formatMinutes(value: number | null) {
+  return value === null ? "—" : `${Math.round(value)} min`;
 }
 
 type SeasonId = "winter" | "spring" | "summer" | "autumn";
@@ -147,10 +156,36 @@ export default function StatsPage() {
   const anxietyAverage = average(recentEmotions, "anxiety");
   const sleepAverage = average(recentEmotions, "sleepQuality");
   const energyAverage = average(recentEmotions, "energy");
+  const treatmentAdherenceAverage = average(recentEmotions, "treatmentAdherence");
+  const physicalActivityAverage = average(recentEmotions, "physicalActivityMinutes");
+  const treatmentDays = recentEmotions.filter(entry => typeof entry.treatmentAdherence === "number").length;
+  const activeDays = recentEmotions.filter(entry => (entry.physicalActivityMinutes ?? 0) > 0).length;
   const previousMoodAverage = average(previousEmotions, "mood");
   const moodEvolution = moodAverage !== null && previousMoodAverage !== null && previousMoodAverage > 0
     ? Math.round(((moodAverage - previousMoodAverage) / previousMoodAverage) * 100)
     : null;
+
+  const activeEmotionDays = recentEmotions.filter(entry => (entry.physicalActivityMinutes ?? 0) >= 20);
+  const inactiveEmotionDays = recentEmotions.filter(entry => (entry.physicalActivityMinutes ?? 0) === 0);
+  const activeMoodAverage = average(activeEmotionDays, "mood");
+  const inactiveMoodAverage = average(inactiveEmotionDays, "mood");
+  const physicalActivityObservation = activeEmotionDays.length >= 3
+    && inactiveEmotionDays.length >= 3
+    && activeMoodAverage !== null
+    && inactiveMoodAverage !== null
+      ? `Les jours avec au moins 20 minutes d'activité physique ont une humeur moyenne de ${activeMoodAverage.toFixed(1).replace(".", ",")}/10 contre ${inactiveMoodAverage.toFixed(1).replace(".", ",")}/10 les jours sans activité encodée.`
+      : "Il faut au moins trois jours avec activité physique et trois jours sans activité pour comparer l'effet possible sur l'humeur.";
+
+  const highAdherenceDays = recentEmotions.filter(entry => typeof entry.treatmentAdherence === "number" && entry.treatmentAdherence >= 8);
+  const lowerAdherenceDays = recentEmotions.filter(entry => typeof entry.treatmentAdherence === "number" && entry.treatmentAdherence < 8);
+  const highAdherenceMood = average(highAdherenceDays, "mood");
+  const lowerAdherenceMood = average(lowerAdherenceDays, "mood");
+  const treatmentObservation = highAdherenceDays.length >= 3
+    && lowerAdherenceDays.length >= 3
+    && highAdherenceMood !== null
+    && lowerAdherenceMood !== null
+      ? `Les jours avec observance du traitement élevée ont une humeur moyenne de ${highAdherenceMood.toFixed(1).replace(".", ",")}/10 contre ${lowerAdherenceMood.toFixed(1).replace(".", ",")}/10 les jours d'observance plus basse.`
+      : "Il faut au moins trois jours avec observance élevée et trois jours avec observance plus basse pour comparer prudemment ce facteur.";
 
   const countBy = (field: "trigger" | "emotionBefore") => {
     const counts: Record<string, number> = {};
@@ -202,6 +237,7 @@ export default function StatsPage() {
       sommeil: emotion?.sleepQuality ?? null,
       energie: emotion?.energy ?? null,
       anxiete: emotion?.anxiety ?? null,
+      activite: emotion?.physicalActivityMinutes ?? null,
     };
   });
 
@@ -219,6 +255,12 @@ export default function StatsPage() {
     moodEvolution === null
       ? "Deux périodes de 30 jours sont nécessaires pour calculer l'évolution de l'humeur."
       : `L'humeur moyenne a ${moodEvolution >= 0 ? "augmenté" : "diminué"} de ${Math.abs(moodEvolution)} % par rapport aux 30 jours précédents.`,
+    activeDays > 0
+      ? `${activeDays} jour${activeDays > 1 ? "s" : ""} avec activité physique sont renseignés sur les 30 derniers jours.`
+      : "Aucune activité physique n'est encore renseignée sur les 30 derniers jours.",
+    treatmentDays > 0
+      ? `L'observance moyenne du traitement renseignée est de ${formatScore(treatmentAdherenceAverage)} sur les 30 derniers jours.`
+      : "Aucune donnée d'observance du traitement n'est encore renseignée sur les 30 derniers jours.",
     seasonsWithEnoughData.length >= 2 && highestSeason
       ? `La saison actuellement la plus associée aux jours de consommation dans tes données est ${highestSeason.label.toLowerCase()}.`
       : "Davantage d'historique est nécessaire pour observer un éventuel effet saisonnier.",
@@ -251,11 +293,23 @@ export default function StatsPage() {
 
       <section className="space-y-3">
         <h2 className="text-lg font-medium">Bien-être sur 30 jours</h2>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-7">
           <StatCard icon={Heart} label="Humeur moyenne" value={formatScore(moodAverage)} />
           <StatCard icon={Moon} label="Sommeil moyen" value={formatScore(sleepAverage)} />
           <StatCard icon={Sun} label="Énergie moyenne" value={formatScore(energyAverage)} />
           <StatCard icon={Brain} label="Anxiété moyenne" value={formatScore(anxietyAverage)} />
+          <StatCard
+            icon={ShieldCheck}
+            label="Observance traitement"
+            value={formatScore(treatmentAdherenceAverage)}
+            sub={treatmentDays > 0 ? `${treatmentDays} jour${treatmentDays > 1 ? "s" : ""} renseigné${treatmentDays > 1 ? "s" : ""}` : "Si traitement"}
+          />
+          <StatCard
+            icon={Activity}
+            label="Activité physique"
+            value={formatMinutes(physicalActivityAverage)}
+            sub={`${activeDays} jour${activeDays > 1 ? "s" : ""} actif${activeDays > 1 ? "s" : ""}`}
+          />
           <StatCard
             icon={TrendingUp}
             label="Évolution de l'humeur"
@@ -302,9 +356,50 @@ export default function StatsPage() {
             <ScoreProgress label="Qualité du sommeil" value={sleepAverage} />
             <ScoreProgress label="Niveau d'énergie" value={energyAverage} />
             <ScoreProgress label="Niveau d'anxiété" value={anxietyAverage} inverse />
+            <ScoreProgress label="Observance du traitement" value={treatmentAdherenceAverage} />
+            <div className="space-y-1.5">
+              <div className="flex justify-between gap-3 text-xs">
+                <span className="text-muted-foreground">Activité physique moyenne</span>
+                <span className="font-medium">{formatMinutes(physicalActivityAverage)}</span>
+              </div>
+              <div className="h-2 rounded-full bg-muted">
+                <div
+                  className="h-2 rounded-full bg-accent"
+                  style={{ width: `${Math.max(0, Math.min(100, ((physicalActivityAverage ?? 0) / 60) * 100))}%` }}
+                />
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-medium">Facteurs de stabilité</h2>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Activité physique et humeur</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm leading-relaxed">{physicalActivityObservation}</p>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Observation indicative basée sur les entrées émotionnelles des 30 derniers jours.
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Traitement et humeur</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm leading-relaxed">{treatmentObservation}</p>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Cette donnée sert à repérer des associations, pas à modifier un traitement sans avis médical.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <FrequencyChart

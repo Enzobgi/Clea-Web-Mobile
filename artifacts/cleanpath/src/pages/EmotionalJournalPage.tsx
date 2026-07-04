@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ChevronDown, ChevronUp, Heart, Moon, Pencil, Sparkles, Sun } from "lucide-react";
+import { Activity, ChevronDown, ChevronUp, Heart, Moon, Pencil, ShieldCheck, Sparkles, Sun } from "lucide-react";
 
 function ScoreSlider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
   const labels = ["", "Très bas", "Bas", "Faible", "Médiocre", "Moyen", "Correct", "Bien", "Très bien", "Excellent", "Parfait"];
@@ -46,6 +47,8 @@ export default function EmotionalJournalPage() {
     anxiety: selectedEntry?.anxiety ?? 5,
     sleepQuality: selectedEntry?.sleepQuality ?? 5,
     energy: selectedEntry?.energy ?? 5,
+    treatmentAdherence: selectedEntry?.treatmentAdherence ?? null as number | null,
+    physicalActivityMinutes: selectedEntry?.physicalActivityMinutes ?? 0,
     gratitude: selectedEntry?.gratitude ?? "",
     whatHelped: selectedEntry?.whatHelped ?? "",
     whatWasDifficult: selectedEntry?.whatWasDifficult ?? "",
@@ -62,6 +65,8 @@ export default function EmotionalJournalPage() {
         anxiety: 5,
         sleepQuality: 5,
         energy: 5,
+        treatmentAdherence: null,
+        physicalActivityMinutes: 0,
         gratitude: "",
         whatHelped: "",
         whatWasDifficult: "",
@@ -74,6 +79,8 @@ export default function EmotionalJournalPage() {
       anxiety: selectedEntry.anxiety,
       sleepQuality: selectedEntry.sleepQuality,
       energy: selectedEntry.energy,
+      treatmentAdherence: selectedEntry.treatmentAdherence ?? null,
+      physicalActivityMinutes: selectedEntry.physicalActivityMinutes ?? 0,
       gratitude: selectedEntry.gratitude,
       whatHelped: selectedEntry.whatHelped,
       whatWasDifficult: selectedEntry.whatWasDifficult,
@@ -159,6 +166,53 @@ export default function EmotionalJournalPage() {
             <ScoreSlider label="Niveau d'anxiété" value={form.anxiety} onChange={v => setForm(f => ({ ...f, anxiety: v }))} />
             <ScoreSlider label="Qualité du sommeil" value={form.sleepQuality} onChange={v => setForm(f => ({ ...f, sleepQuality: v }))} />
             <ScoreSlider label="Niveau d'énergie" value={form.energy} onChange={v => setForm(f => ({ ...f, energy: v }))} />
+
+            <div className="space-y-3 rounded-md bg-muted/35 p-3">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="no-treatment"
+                  checked={form.treatmentAdherence === null}
+                  onCheckedChange={checked => setForm(f => ({
+                    ...f,
+                    treatmentAdherence: checked ? null : 8,
+                  }))}
+                  data-testid="checkbox-no-treatment"
+                />
+                <div className="space-y-1">
+                  <Label htmlFor="no-treatment">Pas de traitement ce jour</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Si tu as un traitement, indique simplement à quel point il a été suivi aujourd'hui.
+                  </p>
+                </div>
+              </div>
+              {form.treatmentAdherence !== null && (
+                <ScoreSlider
+                  label="Observance du traitement"
+                  value={form.treatmentAdherence}
+                  onChange={v => setForm(f => ({ ...f, treatmentAdherence: v }))}
+                />
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="physical-activity">Activité physique</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  id="physical-activity"
+                  type="number"
+                  min={0}
+                  max={600}
+                  inputMode="numeric"
+                  value={form.physicalActivityMinutes}
+                  onChange={e => setForm(f => ({
+                    ...f,
+                    physicalActivityMinutes: Math.max(0, Number.parseInt(e.target.value, 10) || 0),
+                  }))}
+                  data-testid="input-physical-activity"
+                />
+                <span className="shrink-0 text-sm text-muted-foreground">minutes</span>
+              </div>
+            </div>
 
             <div className="space-y-2">
               <Label>Gratitude du jour</Label>
@@ -247,6 +301,12 @@ export default function EmotionalJournalPage() {
                     <span className="flex items-center gap-1"><Moon className="h-3.5 w-3.5" /> Sommeil {entry.sleepQuality}/10</span>
                     <span className="flex items-center gap-1"><Sun className="h-3.5 w-3.5" /> Énergie {entry.energy}/10</span>
                     <span>Anxiété {entry.anxiety}/10</span>
+                    {entry.treatmentAdherence !== null && entry.treatmentAdherence !== undefined && (
+                      <span className="flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" /> Observance {entry.treatmentAdherence}/10</span>
+                    )}
+                    {(entry.physicalActivityMinutes ?? 0) > 0 && (
+                      <span className="flex items-center gap-1"><Activity className="h-3.5 w-3.5" /> Activité {entry.physicalActivityMinutes} min</span>
+                    )}
                   </div>
                   {entry.gratitude && <HistoryText icon={Sparkles} label="Gratitude" text={entry.gratitude} />}
                   {entry.whatHelped && <HistoryText label="Ce qui m'a aidé" text={entry.whatHelped} />}

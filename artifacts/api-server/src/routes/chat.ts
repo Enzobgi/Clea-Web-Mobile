@@ -49,6 +49,8 @@ interface StoredEmotion {
   anxiety?: unknown;
   sleepQuality?: unknown;
   energy?: unknown;
+  treatmentAdherence?: unknown;
+  physicalActivityMinutes?: unknown;
 }
 
 const MODE_INSTRUCTIONS: Record<string, string> = {
@@ -274,6 +276,12 @@ function buildStatsContext(data: Record<string, unknown>): string | null {
   const anxiety = averageField(recentEmotions, "anxiety");
   const sleep = averageField(recentEmotions, "sleepQuality");
   const energy = averageField(recentEmotions, "energy");
+  const treatmentAdherence = averageField(recentEmotions, "treatmentAdherence");
+  const physicalActivity = averageField(recentEmotions, "physicalActivityMinutes");
+  const treatmentDays = recentEmotions.filter(entry => typeof entry.treatmentAdherence === "number").length;
+  const activeDays = recentEmotions.filter(entry =>
+    typeof entry.physicalActivityMinutes === "number" && entry.physicalActivityMinutes > 0
+  ).length;
   const previousMood = averageField(previousEmotions, "mood");
   const moodEvolution = mood !== null && previousMood !== null && previousMood > 0
     ? Math.round(((mood - previousMood) / previousMood) * 100)
@@ -313,6 +321,36 @@ function buildStatsContext(data: Record<string, unknown>): string | null {
       })
     : [];
 
+  const activeEmotionDays = recentEmotions.filter(entry =>
+    typeof entry.physicalActivityMinutes === "number" && entry.physicalActivityMinutes >= 20
+  );
+  const inactiveEmotionDays = recentEmotions.filter(entry =>
+    typeof entry.physicalActivityMinutes === "number" && entry.physicalActivityMinutes === 0
+  );
+  const activeMood = averageField(activeEmotionDays, "mood");
+  const inactiveMood = averageField(inactiveEmotionDays, "mood");
+  const activityInsight = activeEmotionDays.length >= 3
+    && inactiveEmotionDays.length >= 3
+    && activeMood !== null
+    && inactiveMood !== null
+      ? `Activité physique et humeur: ${activeMood.toFixed(1)}/10 les jours avec au moins 20 minutes d'activité contre ${inactiveMood.toFixed(1)}/10 les jours sans activité encodée.`
+      : `Activité physique/humeur insuffisant pour comparer: ${activeEmotionDays.length} jour(s) avec au moins 20 minutes et ${inactiveEmotionDays.length} jour(s) sans activité encodée.`;
+
+  const highAdherenceDays = recentEmotions.filter(entry =>
+    typeof entry.treatmentAdherence === "number" && entry.treatmentAdherence >= 8
+  );
+  const lowerAdherenceDays = recentEmotions.filter(entry =>
+    typeof entry.treatmentAdherence === "number" && entry.treatmentAdherence < 8
+  );
+  const highAdherenceMood = averageField(highAdherenceDays, "mood");
+  const lowerAdherenceMood = averageField(lowerAdherenceDays, "mood");
+  const treatmentInsight = highAdherenceDays.length >= 3
+    && lowerAdherenceDays.length >= 3
+    && highAdherenceMood !== null
+    && lowerAdherenceMood !== null
+      ? `Observance du traitement et humeur: ${highAdherenceMood.toFixed(1)}/10 les jours d'observance élevée contre ${lowerAdherenceMood.toFixed(1)}/10 les jours d'observance plus basse. Ne jamais recommander de modifier un traitement sans professionnel.`
+      : `Observance du traitement/humeur insuffisante pour comparer: ${highAdherenceDays.length} jour(s) avec observance élevée et ${lowerAdherenceDays.length} jour(s) avec observance plus basse.`;
+
   const seasonal = (["hiver", "printemps", "été", "automne"] as const)
     .map(season => {
       const tracked = comparableDates.filter(date => seasonFor(date) === season);
@@ -335,6 +373,7 @@ function buildStatsContext(data: Record<string, unknown>): string | null {
     `Série actuelle sans consommation: ${currentStreak} jour(s); meilleure série: ${bestStreak} jour(s); taux sans consommation: ${abstinenceRate ?? "non calculable"}%.`,
     `Consommations encodées ce mois: ${monthConsumptions}. Réussite face aux envies: ${cravingSuccessRate ?? "non calculable"}% sur ${knownCravings} événement(s) connu(s).`,
     `Sur les 30 derniers jours (${recentEmotions.length} entrée(s)): humeur ${score(mood)}, anxiété ${score(anxiety)}, sommeil ${score(sleep)}, énergie ${score(energy)}.`,
+    `Facteurs sur les 30 derniers jours: observance du traitement ${score(treatmentAdherence)} sur ${treatmentDays} jour(s) renseigné(s); activité physique moyenne ${physicalActivity === null ? "non calculable" : `${Math.round(physicalActivity)} min/jour`} avec ${activeDays} jour(s) actif(s).`,
     moodEvolution === null
       ? "Évolution de l'humeur par rapport aux 30 jours précédents: non calculable."
       : `Évolution de l'humeur par rapport aux 30 jours précédents: ${moodEvolution > 0 ? "+" : ""}${moodEvolution}%.`,
@@ -347,6 +386,8 @@ function buildStatsContext(data: Record<string, unknown>): string | null {
     crossInsights.length > 0
       ? `Comparaisons sur les dates ayant à la fois un statut et une entrée émotionnelle (${emotionsByStatus.consommation.length} jours avec consommation, ${emotionsByStatus.abstinent.length} jours sans consommation): ${crossInsights.map(item => `${item.label} ${item.consumptionAverage.toFixed(1)}/10 les jours avec consommation contre ${item.abstinentAverage.toFixed(1)}/10 les jours sans consommation (écart ${formatDifference(item.difference)})`).join("; ")}. Ces associations ne démontrent pas une causalité.`
       : `Comparaisons émotions/consommation insuffisantes: il faut au moins 3 jours avec consommation et 3 jours sans consommation ayant aussi une entrée émotionnelle (actuellement ${emotionsByStatus.consommation.length} et ${emotionsByStatus.abstinent.length}).`,
+    `${activityInsight} Association indicative, pas une causalité.`,
+    `${treatmentInsight} Association indicative, pas une causalité.`,
     seasonal.length >= 2
       ? `Taux de jours avec consommation par saison (minimum 7 jours renseignés): ${seasonal.map(item => `${item.season} ${item.rate}% sur ${item.tracked} jours`).join(", ")}.`
       : "Comparaison saisonnière insuffisante: moins de deux saisons ont au moins 7 jours renseignés.",

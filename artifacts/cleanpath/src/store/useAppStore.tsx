@@ -51,6 +51,8 @@ export interface EmotionalEntry {
   anxiety: number;
   sleepQuality: number;
   energy: number;
+  treatmentAdherence?: number | null;
+  physicalActivityMinutes?: number;
   gratitude: string;
   whatHelped: string;
   whatWasDifficult: string;
