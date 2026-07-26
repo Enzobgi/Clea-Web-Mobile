@@ -1,4 +1,5 @@
 import { addDays, format, startOfMonth, subDays } from "date-fns";
+import { useState } from "react";
 import { fr } from "date-fns/locale";
 import {
   ArrowLeft,
@@ -74,13 +75,15 @@ const gratitudes = [
 ];
 
 export default function DemoPage() {
+  const [simulation, setSimulation] = useState<"checkin" | "craving" | "consumption" | "sos">("checkin");
+
   return (
     <div className="min-h-[100dvh] bg-background">
-      <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur">
+      <header id="top" className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
           <div>
             <p className="font-medium">CleanPath</p>
-            <p className="text-xs text-muted-foreground">Mode démo en lecture seule</p>
+            <p className="text-xs text-muted-foreground">Données fictives — aucune sauvegarde</p>
           </div>
           <Button asChild variant="outline" size="sm">
             <a href="/">
@@ -90,6 +93,10 @@ export default function DemoPage() {
           </Button>
         </div>
       </header>
+
+      <div className="sticky top-16 z-10 border-b border-primary/20 bg-primary/10 px-4 py-2 text-center text-xs font-medium text-primary">
+        Données fictives — aucune sauvegarde dans la base réelle
+      </div>
 
       <main className="mx-auto max-w-5xl space-y-10 px-4 py-8 pb-16">
         <section className="space-y-5">
@@ -125,6 +132,24 @@ export default function DemoPage() {
           <DemoNav href="#chat" icon={MessageCircle} label="Chat" />
           <DemoNav href="#profil" icon={UserRound} label="Profil" />
         </nav>
+
+        <section className="space-y-4 rounded-md border border-primary/25 bg-primary/5 p-4">
+          <h2 className="text-lg font-medium">Simulation interactive</h2>
+          <div className="grid gap-2 sm:grid-cols-4">
+            <Button variant={simulation === "checkin" ? "default" : "outline"} onClick={() => setSimulation("checkin")}>Check-in</Button>
+            <Button variant={simulation === "craving" ? "default" : "outline"} onClick={() => setSimulation("craving")}>Envie surmontée</Button>
+            <Button variant={simulation === "consumption" ? "default" : "outline"} onClick={() => setSimulation("consumption")}>Consommation fictive</Button>
+            <Button variant={simulation === "sos" ? "default" : "outline"} onClick={() => setSimulation("sos")}>Mode SOS</Button>
+          </div>
+          <Card>
+            <CardContent className="p-4 text-sm">
+              {simulation === "checkin" && <p>Simulation: humeur 8/10, sommeil 7/10, activité physique 25 minutes, gratitude ajoutée. Rien n'est enregistré.</p>}
+              {simulation === "craving" && <p>Simulation: envie à 7/10, stratégie “changer de lieu”, résultat “envie surmontée”. Le calendrier la compterait comme une journée sans consommation.</p>}
+              {simulation === "consumption" && <p>Simulation: consommation fictive avec sécurité immédiate, repères personnels, contact de confiance et proposition de check-in demain.</p>}
+              {simulation === "sos" && <p>Simulation: minuteur de dix minutes, respiration, actions immédiates et rappel d'appeler le 112 en cas de danger immédiat.</p>}
+            </CardContent>
+          </Card>
+        </section>
 
         <section id="aujourdhui" className="scroll-mt-24 space-y-5">
           <div>
@@ -517,6 +542,9 @@ export default function DemoPage() {
           </p>
           <Button asChild className="mt-4">
             <a href="/">Retourner à l'inscription</a>
+          </Button>
+          <Button asChild variant="outline" className="ml-2 mt-4">
+            <a href="#top">Retour en haut</a>
           </Button>
         </section>
       </main>

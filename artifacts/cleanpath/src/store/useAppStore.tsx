@@ -32,15 +32,53 @@ export interface ConsumptionEntry {
   id: string;
   date: string;
   time: string;
+  createdAt?: string;
+  substanceId?: string;
   substance: string;
+  unit?: string;
   quantity: string;
   context: string;
   emotionBefore: string;
   emotionAfter: string;
   trigger: string;
   cravingLevel: number;
+  cravingBefore?: number;
+  cravingAfter?: number;
+  peoplePresent?: string;
+  strategyTried?: string;
+  cost?: string;
   note: string;
   type: "consommation" | "envie_seulement";
+}
+
+export interface SubstanceTracking {
+  id: string;
+  name: string;
+  category: string;
+  objective: "abstinence" | "reduction" | "stabilisation";
+  startDate: string;
+  unit: string;
+  dailyLimit: string;
+  weeklyLimit: string;
+  usualFrequency: string;
+  archivedAt: string | null;
+}
+
+export interface PlannedCheckIn {
+  id: string;
+  date: string;
+  sourceConsumptionId: string;
+  completedAt: string | null;
+}
+
+export interface CareAppointment {
+  id: string;
+  date: string;
+  professionalType: string;
+  notesToDiscuss: string;
+  agreedObjectives: string;
+  reminderEnabled: boolean;
+  summaryAfter: string;
 }
 
 export interface EmotionalEntry {
@@ -104,6 +142,10 @@ export interface AppSettings {
   reminderSettings: { [key: string]: boolean };
   chatMemoryEnabled: boolean;
   chatStatsEnabled: boolean;
+  quietHoursStart?: string;
+  quietHoursEnd?: string;
+  discreetNotificationText?: string;
+  allNotificationsDisabled?: boolean;
 }
 
 const defaultSettings: AppSettings = {
@@ -112,6 +154,10 @@ const defaultSettings: AppSettings = {
   reminderSettings: {},
   chatMemoryEnabled: false,
   chatStatsEnabled: true,
+  quietHoursStart: "22:00",
+  quietHoursEnd: "08:00",
+  discreetNotificationText: "CleanPath: un petit point prévu.",
+  allNotificationsDisabled: false,
 };
 
 const defaultProfile: UserProfile = {
@@ -158,6 +204,9 @@ const dataSuffixes = [
   "sessions",
   "dayEntries",
   "consumptions",
+  "substanceTrackings",
+  "plannedCheckIns",
+  "careAppointments",
   "emotions",
   "gratitudes",
   "cravings",
@@ -302,6 +351,15 @@ function useAppStoreState() {
   const [consumptions, setConsumptions_] = useState<ConsumptionEntry[]>(
     () => readFromStorage(`${prefix}_consumptions`, [], vaultData, vaultPresent)
   );
+  const [substanceTrackings, setSubstanceTrackings_] = useState<SubstanceTracking[]>(
+    () => readFromStorage(`${prefix}_substanceTrackings`, [], vaultData, vaultPresent)
+  );
+  const [plannedCheckIns, setPlannedCheckIns_] = useState<PlannedCheckIn[]>(
+    () => readFromStorage(`${prefix}_plannedCheckIns`, [], vaultData, vaultPresent)
+  );
+  const [careAppointments, setCareAppointments_] = useState<CareAppointment[]>(
+    () => readFromStorage(`${prefix}_careAppointments`, [], vaultData, vaultPresent)
+  );
   const [emotions, setEmotions_] = useState<EmotionalEntry[]>(
     () => readFromStorage(`${prefix}_emotions`, [], vaultData, vaultPresent)
   );
@@ -338,6 +396,9 @@ function useAppStoreState() {
   const setSessions = makeSetter(`${prefix}_sessions`, setSessions_, vaultPresent);
   const setDayEntries = makeSetter(`${prefix}_dayEntries`, setDayEntries_, vaultPresent);
   const setConsumptions = makeSetter(`${prefix}_consumptions`, setConsumptions_, vaultPresent);
+  const setSubstanceTrackings = makeSetter(`${prefix}_substanceTrackings`, setSubstanceTrackings_, vaultPresent);
+  const setPlannedCheckIns = makeSetter(`${prefix}_plannedCheckIns`, setPlannedCheckIns_, vaultPresent);
+  const setCareAppointments = makeSetter(`${prefix}_careAppointments`, setCareAppointments_, vaultPresent);
   const setEmotions = makeSetter(`${prefix}_emotions`, setEmotions_, vaultPresent);
   const setGratitudes = makeSetter(`${prefix}_gratitudes`, setGratitudes_, vaultPresent);
   const setCravings = makeSetter(`${prefix}_cravings`, setCravings_, vaultPresent);
@@ -356,8 +417,8 @@ function useAppStoreState() {
     }));
   };
 
-  const stateRef = useRef({ sessions, dayEntries, consumptions, emotions, gratitudes, cravings, safetyPlan, contacts, goals, profile, weeklyGoals, programProgress, chatMemory, settings });
-  stateRef.current = { sessions, dayEntries, consumptions, emotions, gratitudes, cravings, safetyPlan, contacts, goals, profile, weeklyGoals, programProgress, chatMemory, settings };
+  const stateRef = useRef({ sessions, dayEntries, consumptions, substanceTrackings, plannedCheckIns, careAppointments, emotions, gratitudes, cravings, safetyPlan, contacts, goals, profile, weeklyGoals, programProgress, chatMemory, settings });
+  stateRef.current = { sessions, dayEntries, consumptions, substanceTrackings, plannedCheckIns, careAppointments, emotions, gratitudes, cravings, safetyPlan, contacts, goals, profile, weeklyGoals, programProgress, chatMemory, settings };
 
   useEffect(() => {
     if (!user) {
@@ -375,6 +436,9 @@ function useAppStoreState() {
         const nextSessions = (data.sessions as AbstractionSession[] | undefined) ?? [];
         const nextDayEntries = (data.dayEntries as DayEntry[] | undefined) ?? [];
         const nextConsumptions = (data.consumptions as ConsumptionEntry[] | undefined) ?? [];
+        const nextSubstanceTrackings = (data.substanceTrackings as SubstanceTracking[] | undefined) ?? [];
+        const nextPlannedCheckIns = (data.plannedCheckIns as PlannedCheckIn[] | undefined) ?? [];
+        const nextCareAppointments = (data.careAppointments as CareAppointment[] | undefined) ?? [];
         const nextEmotions = (data.emotions as EmotionalEntry[] | undefined) ?? [];
         const nextGratitudes = (data.gratitudes as GratitudeEntry[] | undefined) ?? [];
         const nextCravings = (data.cravings as CravingEvent[] | undefined) ?? [];
@@ -391,6 +455,9 @@ function useAppStoreState() {
           [`${prefix}_sessions`, nextSessions],
           [`${prefix}_dayEntries`, nextDayEntries],
           [`${prefix}_consumptions`, nextConsumptions],
+          [`${prefix}_substanceTrackings`, nextSubstanceTrackings],
+          [`${prefix}_plannedCheckIns`, nextPlannedCheckIns],
+          [`${prefix}_careAppointments`, nextCareAppointments],
           [`${prefix}_emotions`, nextEmotions],
           [`${prefix}_gratitudes`, nextGratitudes],
           [`${prefix}_cravings`, nextCravings],
@@ -411,6 +478,9 @@ function useAppStoreState() {
         setSessions_(nextSessions);
         setDayEntries_(nextDayEntries);
         setConsumptions_(nextConsumptions);
+        setSubstanceTrackings_(nextSubstanceTrackings);
+        setPlannedCheckIns_(nextPlannedCheckIns);
+        setCareAppointments_(nextCareAppointments);
         setEmotions_(nextEmotions);
         setGratitudes_(nextGratitudes);
         setCravings_(nextCravings);
@@ -447,6 +517,15 @@ function useAppStoreState() {
           break;
         case `${prefix}_consumptions`:
           setConsumptions_(value as ConsumptionEntry[]);
+          break;
+        case `${prefix}_substanceTrackings`:
+          setSubstanceTrackings_(value as SubstanceTracking[]);
+          break;
+        case `${prefix}_plannedCheckIns`:
+          setPlannedCheckIns_(value as PlannedCheckIn[]);
+          break;
+        case `${prefix}_careAppointments`:
+          setCareAppointments_(value as CareAppointment[]);
           break;
         case `${prefix}_emotions`:
           setEmotions_(value as EmotionalEntry[]);
@@ -495,6 +574,9 @@ function useAppStoreState() {
         [`${prefix}_sessions`]: stateRef.current.sessions,
         [`${prefix}_dayEntries`]: stateRef.current.dayEntries,
         [`${prefix}_consumptions`]: stateRef.current.consumptions,
+        [`${prefix}_substanceTrackings`]: stateRef.current.substanceTrackings,
+        [`${prefix}_plannedCheckIns`]: stateRef.current.plannedCheckIns,
+        [`${prefix}_careAppointments`]: stateRef.current.careAppointments,
         [`${prefix}_emotions`]: stateRef.current.emotions,
         [`${prefix}_gratitudes`]: stateRef.current.gratitudes,
         [`${prefix}_cravings`]: stateRef.current.cravings,
@@ -508,7 +590,7 @@ function useAppStoreState() {
       });
     }, 300);
     return () => clearTimeout(timer);
-  }, [sessions, dayEntries, consumptions, emotions, gratitudes, cravings, safetyPlan, contacts, goals, profile, weeklyGoals, programProgress, chatMemory, vaultPresent, saveData, prefix]);
+  }, [sessions, dayEntries, consumptions, substanceTrackings, plannedCheckIns, careAppointments, emotions, gratitudes, cravings, safetyPlan, contacts, goals, profile, weeklyGoals, programProgress, chatMemory, vaultPresent, saveData, prefix]);
 
   useEffect(() => {
     if (!user || !remoteReady) return;
@@ -516,6 +598,9 @@ function useAppStoreState() {
       sessions,
       dayEntries,
       consumptions,
+      substanceTrackings,
+      plannedCheckIns,
+      careAppointments,
       emotions,
       gratitudes,
       cravings,
@@ -534,6 +619,9 @@ function useAppStoreState() {
     sessions,
     dayEntries,
     consumptions,
+    substanceTrackings,
+    plannedCheckIns,
+    careAppointments,
     emotions,
     gratitudes,
     cravings,
@@ -553,6 +641,9 @@ function useAppStoreState() {
     sessions, setSessions,
     dayEntries, setDayEntries,
     consumptions, setConsumptions,
+    substanceTrackings, setSubstanceTrackings,
+    plannedCheckIns, setPlannedCheckIns,
+    careAppointments, setCareAppointments,
     emotions, setEmotions,
     gratitudes, setGratitudes,
     cravings, setCravings,

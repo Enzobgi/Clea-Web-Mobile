@@ -46,8 +46,29 @@ Copier `.env.example` et renseigner:
 - `APP_ORIGIN`: origine publique de l'application.
 - `CORS_ORIGIN`: origine autorisée par l'API.
 - `PORT`: port local de l'API.
+- `GEMINI_API_KEY`: clé Gemini utilisée par le chat IA.
+- `GEMINI_MODEL`: modèle Gemini, par défaut `gemini-2.5-flash`.
+- `PASSWORD_RESET_BASE_URL`: base prévue pour les futurs liens de réinitialisation.
 
 Aucun secret ne doit être placé dans le frontend.
+
+## Migrations de données
+
+Les migrations SQL sont idempotentes dans `lib/db/src/index.ts`:
+
+- ajout de `users.email_verified_at`;
+- ajout de `auth_sessions.user_agent` et `auth_sessions.last_seen_at`;
+- création de `password_reset_tokens`;
+- création de `login_attempts`.
+
+Les nouvelles données métier restent dans le document JSON utilisateur:
+
+- `substanceTrackings`;
+- `plannedCheckIns`;
+- `careAppointments`;
+- champs enrichis du journal de consommation.
+
+La réinitialisation de mot de passe dispose des tables et endpoints, mais l'envoi réel d'email reste à brancher sur un fournisseur dédié avant usage public complet.
 
 ## Vérification
 
@@ -56,7 +77,7 @@ pnpm run typecheck
 pnpm run build:production
 ```
 
-Le dépôt ne possède pas encore de configuration de lint ni de suite de tests automatisés. Leur ajout fait partie de la phase qualité.
+Le dépôt ne possède pas encore de configuration de lint ni de suite de tests automatisés complète. Les vérifications disponibles restent le typecheck et le build de production.
 
 ## Contenus
 

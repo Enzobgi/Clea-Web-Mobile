@@ -28,6 +28,7 @@ import JournalPage from "@/pages/JournalPage";
 import ProgramsPage from "@/pages/ProgramsPage";
 import ChatPage from "@/pages/ChatPage";
 import ProfilePage from "@/pages/ProfilePage";
+import LegalPage from "@/pages/LegalPage";
 
 const queryClient = new QueryClient();
 
@@ -78,12 +79,12 @@ function AppContent() {
     return <DemoPage />;
   }
 
+  if (["/confidentialite", "/conditions", "/mentions-legales"].includes(window.location.pathname)) {
+    return <LegalPage />;
+  }
+
   if (isLoading) {
-    return (
-      <div className="min-h-[100dvh] flex items-center justify-center bg-background">
-        <p className="text-sm text-muted-foreground">Ouverture de ton espace...</p>
-      </div>
-    );
+    return <WelcomeScreen />;
   }
 
   if (!currentUser) {

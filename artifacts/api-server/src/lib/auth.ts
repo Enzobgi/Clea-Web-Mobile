@@ -21,6 +21,13 @@ const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 30;
 
 export type PublicUser = Pick<User, "id" | "email" | "displayName">;
 
+export interface PasswordStrength {
+  score: 0 | 1 | 2 | 3 | 4;
+  label: string;
+  valid: boolean;
+  issues: string[];
+}
+
 export function toPublicUser(user: User): PublicUser {
   return {
     id: user.id,
@@ -53,7 +60,35 @@ export async function verifyPassword(password: string, storedHash: string) {
   return expected.length === derivedKey.length && timingSafeEqual(expected, derivedKey);
 }
 
-export async function createSession(userId: string, res: Response) {
+export function assessPasswordStrength(password: string): PasswordStrength {
+  const issues: string[] = [];
+  if (password.length < 12) issues.push("Utilise au moins 12 caractères.");
+  if (!/[a-z]/.test(password)) issues.push("Ajoute une lettre minuscule.");
+  if (!/[A-Z]/.test(password)) issues.push("Ajoute une lettre majuscule.");
+  if (!/[0-9]/.test(password)) issues.push("Ajoute un chiffre.");
+  if (!/[^A-Za-z0-9]/.test(password)) issues.push("Ajoute un symbole.");
+  if (/^[a-z]+$/.test(password)) issues.push("Un mot de passe composé uniquement de lettres minuscules est trop faible.");
+  if (/^(.)\1+$/.test(password)) issues.push("Évite les caractères répétés.");
+
+  let score = 0;
+  if (password.length >= 10) score++;
+  if (password.length >= 14) score++;
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+  if (/^[a-z]+$/.test(password)) score = Math.min(score, 1);
+  if (password.length >= 24 && !/^(.)\1+$/.test(password)) score = Math.max(score, 3);
+
+  const normalizedScore = Math.max(0, Math.min(4, score)) as PasswordStrength["score"];
+  return {
+    score: normalizedScore,
+    label: normalizedScore >= 4 ? "Robuste" : normalizedScore >= 3 ? "Correct" : normalizedScore >= 2 ? "Fragile" : "Trop faible",
+    valid: normalizedScore >= 3 && issues.length <= 2 && !/^[a-z]+$/.test(password),
+    issues,
+  };
+}
+
+export async function createSession(userId: string, res: Response, req?: Request) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
 
@@ -61,6 +96,8 @@ export async function createSession(userId: string, res: Response) {
     id: randomUUID(),
     userId,
     tokenHash: hashToken(token),
+    userAgent: req?.get("user-agent")?.slice(0, 300),
+    lastSeenAt: new Date(),
     expiresAt,
   });
 
@@ -104,7 +141,20 @@ export async function getSessionUser(req: Request) {
     )
     .limit(1);
 
-  return rows[0]?.user ?? null;
+  const user = rows[0]?.user ?? null;
+  if (user) {
+    void db
+      .update(authSessionsTable)
+      .set({ lastSeenAt: new Date() })
+      .where(eq(authSessionsTable.tokenHash, hashToken(token)))
+      .catch(() => undefined);
+  }
+  return user;
+}
+
+export function currentSessionHash(req: Request) {
+  const token = req.cookies?.[SESSION_COOKIE];
+  return typeof token === "string" ? hashToken(token) : null;
 }
 
 function hashToken(token: string) {

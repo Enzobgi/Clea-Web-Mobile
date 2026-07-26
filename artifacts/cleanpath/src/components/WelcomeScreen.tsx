@@ -4,7 +4,31 @@ import { useUser } from "@/store/UserContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowRight, Eye, LockKeyhole } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, LockKeyhole } from "lucide-react";
+
+function passwordStrength(password: string) {
+  const issues: string[] = [];
+  if (password.length < 12) issues.push("12 caractères minimum recommandés.");
+  if (!/[a-z]/.test(password)) issues.push("Ajoute une minuscule.");
+  if (!/[A-Z]/.test(password)) issues.push("Ajoute une majuscule.");
+  if (!/[0-9]/.test(password)) issues.push("Ajoute un chiffre.");
+  if (!/[^A-Za-z0-9]/.test(password)) issues.push("Ajoute un symbole.");
+  if (/^[a-z]+$/.test(password)) issues.push("Uniquement des minuscules : trop faible.");
+  let score = 0;
+  if (password.length >= 10) score++;
+  if (password.length >= 14) score++;
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+  if (/^[a-z]+$/.test(password)) score = Math.min(score, 1);
+  score = Math.max(0, Math.min(4, score));
+  return {
+    score,
+    label: score >= 4 ? "Robuste" : score >= 3 ? "Correct" : score >= 2 ? "Fragile" : "Trop faible",
+    valid: score >= 3 && !/^[a-z]+$/.test(password),
+    issues,
+  };
+}
 
 export function WelcomeScreen() {
   const { login, register } = useUser();
@@ -12,8 +36,11 @@ export function WelcomeScreen() {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const strength = passwordStrength(password);
 
   const submit = async () => {
     setError("");
@@ -26,6 +53,25 @@ export function WelcomeScreen() {
       }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Impossible de continuer.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const requestReset = async () => {
+    setError("");
+    setForgotSent(false);
+    setBusy(true);
+    try {
+      await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      setForgotSent(true);
+    } catch {
+      setError("Impossible de préparer la réinitialisation pour le moment.");
     } finally {
       setBusy(false);
     }
@@ -95,24 +141,63 @@ export function WelcomeScreen() {
 
           <div className="space-y-1.5">
             <Label htmlFor="account-password">Mot de passe</Label>
-            <Input
-              id="account-password"
-              type="password"
-              value={password}
-              onChange={event => setPassword(event.target.value)}
-              onKeyDown={event => event.key === "Enter" && void submit()}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              placeholder={mode === "register" ? "10 caractères minimum" : "Ton mot de passe"}
-              data-testid="input-auth-password"
-            />
+            <div className="relative">
+              <Input
+                id="account-password"
+                type={passwordVisible ? "text" : "password"}
+                value={password}
+                onChange={event => setPassword(event.target.value)}
+                onKeyDown={event => event.key === "Enter" && void submit()}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                placeholder={mode === "register" ? "Mot de passe robuste" : "Ton mot de passe"}
+                className="pr-10"
+                data-testid="input-auth-password"
+              />
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                onClick={() => setPasswordVisible(value => !value)}
+                aria-label={passwordVisible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+              >
+                {passwordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {mode === "register" && password && (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 flex-1 rounded-full bg-muted">
+                    <div className="h-2 rounded-full bg-primary" style={{ width: `${Math.max(12, strength.score * 25)}%` }} />
+                  </div>
+                  <span className="text-xs font-medium text-muted-foreground">{strength.label}</span>
+                </div>
+                {strength.issues.slice(0, 2).map(issue => (
+                  <p key={issue} className="text-xs text-muted-foreground">{issue}</p>
+                ))}
+              </div>
+            )}
+            {mode === "login" && (
+              <button
+                type="button"
+                className="text-xs text-primary underline-offset-4 hover:underline"
+                onClick={() => void requestReset()}
+                disabled={!email.trim() || busy}
+              >
+                Mot de passe oublié ?
+              </button>
+            )}
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
+          {forgotSent && (
+            <p className="text-sm text-primary">
+              Si un compte existe avec cette adresse, la procédure de réinitialisation est préparée. L'envoi email reste à configurer côté serveur.
+            </p>
+          )}
 
           <Button
             className="w-full h-11"
             onClick={() => void submit()}
-            disabled={busy || !email.trim() || password.length < (mode === "register" ? 10 : 1) || (mode === "register" && displayName.trim().length < 2)}
+            disabled={busy || !email.trim() || password.length < 1 || (mode === "register" && (displayName.trim().length < 2 || !strength.valid))}
             data-testid="button-auth-submit"
           >
             {busy ? "Un instant..." : mode === "login" ? "Se connecter" : "Créer mon compte"}
@@ -130,6 +215,14 @@ export function WelcomeScreen() {
 
         <p className="text-xs text-muted-foreground text-center leading-relaxed">
           Tes données sont associées à ton compte et transmises via une connexion sécurisée.
+          {mode === "register" && (
+            <>
+              {" "}En créant un compte, consulte les documents légaux :
+              {" "}<a className="underline underline-offset-4" href="/confidentialite">confidentialité</a>,
+              {" "}<a className="underline underline-offset-4" href="/conditions">conditions</a>,
+              {" "}<a className="underline underline-offset-4" href="/mentions-legales">mentions légales</a>.
+            </>
+          )}
         </p>
       </motion.div>
     </div>

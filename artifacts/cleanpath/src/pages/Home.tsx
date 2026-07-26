@@ -1,7 +1,8 @@
 import { Link } from "wouter";
-import { AlertCircle, Euro, TrendingUp } from "lucide-react";
+import { AlertCircle, Download, Euro, TrendingUp } from "lucide-react";
 import { eachDayOfInterval, endOfMonth, format, isSameDay, startOfMonth } from "date-fns";
 import { fr } from "date-fns/locale";
+import { useEffect, useState } from "react";
 import { useAppStore } from "@/store/useAppStore";
 import { useUser } from "@/store/UserContext";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,10 @@ const QUOTES = [
   "Le chemin se construit en marchant. Un pas à la fois.",
 ];
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+}
+
 export default function Home() {
   const { dayEntries, setDayEntries, consumptions, settings, emotions, profile } = useAppStore();
   const { currentUser } = useUser();
@@ -36,6 +41,16 @@ export default function Home() {
   const hour = today.getHours();
   const greeting = hour < 5 ? "Bonne nuit" : hour < 12 ? "Bonjour" : hour < 18 ? "Bon après-midi" : "Bonsoir";
   const name = profile.nickname || currentUser || "";
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
 
   const cycleStatus = (day: Date) => {
     if (day > today) return;
@@ -68,6 +83,20 @@ export default function Home() {
       </div>
 
       <Link href="/urgence"><Button size="lg" className="h-16 w-full gap-3 bg-destructive text-base hover:bg-destructive/90"><AlertCircle className="h-5 w-5" />J'ai une envie forte</Button></Link>
+
+      {installPrompt && (
+        <Button
+          variant="outline"
+          className="h-12 w-full gap-2"
+          onClick={() => {
+            void installPrompt.prompt();
+            setInstallPrompt(null);
+          }}
+        >
+          <Download className="h-4 w-4" />
+          Installer CleanPath
+        </Button>
+      )}
 
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-sm font-medium uppercase text-muted-foreground">Ce mois-ci</CardTitle></CardHeader>

@@ -214,7 +214,40 @@
   * {
     @apply border-border;
   }
+  :focus-visible {
+    outline: 3px solid hsl(var(--ring));
+    outline-offset: 3px;
+  }
   body {
     @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --foreground: 20 14% 8%;
+    --muted-foreground: 20 10% 25%;
+    --border: 40 20% 65%;
+    --primary: 153 35% 30%;
+    --destructive: 0 65% 42%;
+  }
+
+  .dark {
+    --foreground: 40 20% 98%;
+    --muted-foreground: 40 15% 82%;
+    --border: 20 14% 42%;
+    --primary: 153 30% 68%;
+    --destructive: 0 60% 68%;
   }
 }

@@ -8,83 +8,141 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Plus, Star, Trash2 } from "lucide-react";
+import { CalendarCheck, HeartHandshake, Pencil, Phone, Plus, ShieldAlert, Star, Trash2 } from "lucide-react";
 import { upsertDayEntriesForDates } from "@/lib/abstinence";
 
 const CONTEXTS = ["Seul(e)", "Avec des amis", "Stress", "Fête", "Ennui", "Conflit", "Fatigue", "Autre"];
 const EMOTIONS = ["Anxieux/se", "Déprimé(e)", "En colère", "Frustré(e)", "Heureux/se", "Calme", "Excité(e)", "Fatigué(e)", "Seul(e)", "Nostalgique", "Autre"];
 const TRIGGERS = ["Stress au travail", "Problème relationnel", "Ennui", "Pression sociale", "Douleur physique", "Mauvaises nouvelles", "Habitude", "Autre"];
+const PEOPLE = ["Seul(e)", "Avec une personne de confiance", "Avec des amis", "Avec des collègues", "Avec des personnes qui consommaient", "Autre"];
+const STRATEGIES = ["Aucune", "Respiration", "Changer de lieu", "Appeler quelqu'un", "Marcher", "Boire de l'eau", "Retarder de 10 minutes", "Autre"];
 
 type ConsumptionForm = Omit<ConsumptionEntry, "id">;
 
-const emptyForm: ConsumptionForm = {
-  date: new Date().toISOString().slice(0, 10),
-  time: new Date().toTimeString().slice(0, 5),
+const nowDate = () => new Date().toISOString().slice(0, 10);
+const nowTime = () => new Date().toTimeString().slice(0, 5);
+
+const makeEmptyForm = (type: ConsumptionEntry["type"]): ConsumptionForm => ({
+  date: nowDate(),
+  time: nowTime(),
+  createdAt: new Date().toISOString(),
   substance: "",
+  substanceId: "",
+  unit: "",
   quantity: "",
   context: "",
   emotionBefore: "",
   emotionAfter: "",
   trigger: "",
   cravingLevel: 5,
+  cravingBefore: 5,
+  cravingAfter: 5,
+  peoplePresent: "",
+  strategyTried: "",
+  cost: "",
   note: "",
-  type: "consommation",
-};
+  type,
+});
 
 export default function ConsumptionJournalPage() {
-  const { consumptions, setConsumptions, dayEntries, setDayEntries } = useAppStore();
+  const {
+    consumptions,
+    setConsumptions,
+    dayEntries,
+    setDayEntries,
+    substanceTrackings,
+    safetyPlan,
+    contacts,
+    plannedCheckIns,
+    setPlannedCheckIns,
+  } = useAppStore();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [relapseMessage, setRelapseMessage] = useState<string | null>(null);
+  const [form, setForm] = useState<ConsumptionForm>(() => makeEmptyForm("consommation"));
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [supportEntry, setSupportEntry] = useState<ConsumptionEntry | null>(null);
+  const [safeNow, setSafeNow] = useState<boolean | null>(null);
+  const [worryingSymptoms, setWorryingSymptoms] = useState(false);
+  const [checkInPlanned, setCheckInPlanned] = useState(false);
 
   const openNew = (type: "consommation" | "envie_seulement") => {
-    setForm({ ...emptyForm, type, date: new Date().toISOString().slice(0, 10), time: new Date().toTimeString().slice(0, 5) });
+    setEditingId(null);
+    setForm(makeEmptyForm(type));
+    setOpen(true);
+  };
+
+  const openEdit = (entry: ConsumptionEntry) => {
+    setEditingId(entry.id);
+    setForm({
+      ...makeEmptyForm(entry.type),
+      ...entry,
+      substanceId: entry.substanceId ?? "",
+      unit: entry.unit ?? "",
+      cravingBefore: entry.cravingBefore ?? entry.cravingLevel ?? 5,
+      cravingAfter: entry.cravingAfter ?? entry.cravingLevel ?? 5,
+      peoplePresent: entry.peoplePresent ?? "",
+      strategyTried: entry.strategyTried ?? "",
+      cost: entry.cost ?? "",
+    });
     setOpen(true);
   };
 
   const handleSave = () => {
     const entry: ConsumptionEntry = {
-      id: Date.now().toString(),
+      id: editingId ?? Date.now().toString(),
       ...form,
+      createdAt: form.createdAt ?? new Date().toISOString(),
+      substance: selectedSubstance?.name ?? form.substance,
+      unit: selectedSubstance?.unit ?? form.unit,
+      cravingLevel: form.cravingBefore ?? form.cravingLevel,
     };
-    setConsumptions([entry, ...consumptions]);
-    setDayEntries(upsertDayEntriesForDates(
-      dayEntries,
-      [form.date],
-      form.type === "consommation" ? "consommation" : "envie_forte",
-    ));
+    const nextConsumptions = editingId
+      ? consumptions.map(item => item.id === editingId ? entry : item)
+      : [entry, ...consumptions];
+    setConsumptions(nextConsumptions);
+    syncDayStatus(nextConsumptions, form.date);
     setOpen(false);
-    if (form.type === "consommation") {
-      setRelapseMessage("Une rechute ne détruit pas ton chemin. Elle donne une information. Que peux-tu apprendre de ce moment ?");
-    }
+    setEditingId(null);
+    if (form.type === "consommation" && !editingId) setSupportEntry(entry);
   };
 
   const handleDelete = (id: string) => {
     const deletedEntry = consumptions.find(c => c.id === id);
     const remainingConsumptions = consumptions.filter(c => c.id !== id);
     setConsumptions(remainingConsumptions);
+    if (deletedEntry) syncDayStatus(remainingConsumptions, deletedEntry.date);
+  };
 
-    if (!deletedEntry) return;
+  const selectedSubstance = substanceTrackings.find(substance => substance.id === form.substanceId);
+  const activeSubstances = substanceTrackings.filter(substance => !substance.archivedAt);
 
-    const sameDateHasConsumption = remainingConsumptions.some(c =>
-      c.date === deletedEntry.date && c.type === "consommation"
-    );
-    if (sameDateHasConsumption) return;
+  const syncDayStatus = (entries: ConsumptionEntry[], date: string) => {
+    const sameDateHasConsumption = entries.some(entry => entry.date === date && entry.type === "consommation");
+    const sameDateHasCraving = entries.some(entry => entry.date === date && entry.type === "envie_seulement");
+    setDayEntries(upsertDayEntriesForDates(
+      dayEntries,
+      [date],
+      sameDateHasConsumption ? "consommation" : sameDateHasCraving ? "envie_forte" : "non_renseigne",
+    ));
+  };
 
-    const sameDateHasCraving = remainingConsumptions.some(c =>
-      c.date === deletedEntry.date && c.type === "envie_seulement"
-    );
-    const currentDayEntry = dayEntries.find(entry => entry.date === deletedEntry.date);
-
-    if (currentDayEntry?.status === "consommation" || currentDayEntry?.status === "envie_forte") {
-      setDayEntries(upsertDayEntriesForDates(
-        dayEntries,
-        [deletedEntry.date],
-        sameDateHasCraving ? "envie_forte" : "non_renseigne",
-      ));
-    }
+  const planTomorrowCheckIn = () => {
+    if (!supportEntry || checkInPlanned) return;
+    const date = new Date(`${supportEntry.date}T12:00:00`);
+    date.setDate(date.getDate() + 1);
+    setPlannedCheckIns([
+      ...plannedCheckIns,
+      {
+        id: Date.now().toString(),
+        date: date.toISOString().slice(0, 10),
+        sourceConsumptionId: supportEntry.id,
+        completedAt: null,
+      },
+    ]);
+    setCheckInPlanned(true);
   };
 
   return (
@@ -93,15 +151,6 @@ export default function ConsumptionJournalPage() {
         <h1 className="text-2xl font-medium text-foreground">Journal de consommation</h1>
         <p className="text-muted-foreground">Comprendre tes habitudes sans jugement.</p>
       </header>
-
-      {relapseMessage && (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="p-5 space-y-3">
-            <p className="text-foreground italic">"{relapseMessage}"</p>
-            <Button variant="outline" size="sm" onClick={() => setRelapseMessage(null)}>Fermer</Button>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="grid grid-cols-2 gap-3">
         <Button
@@ -147,9 +196,14 @@ export default function ConsumptionJournalPage() {
                         <p className="text-sm text-muted-foreground">
                           {format(new Date(entry.date), "d MMMM", { locale: fr })} à {entry.time}
                         </p>
+                        {entry.createdAt && entry.createdAt.slice(0, 10) > entry.date && (
+                          <Badge variant="secondary">Saisi après coup</Badge>
+                        )}
                       </div>
                       {entry.type === "consommation" && (
-                        <p className="font-medium">{entry.substance} {entry.quantity && `— ${entry.quantity}`}</p>
+                        <p className="font-medium">
+                          {entry.substance || "Substance non précisée"} {entry.quantity && `— ${entry.quantity}${entry.unit ? ` ${entry.unit}` : ""}`}
+                        </p>
                       )}
                       {entry.type === "envie_seulement" && (
                         <p className="font-medium">J'ai eu envie mais je n'ai pas consommé</p>
@@ -157,19 +211,28 @@ export default function ConsumptionJournalPage() {
                       <div className="flex flex-wrap gap-2 mt-1">
                         {entry.context && <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{entry.context}</span>}
                         {entry.trigger && <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{entry.trigger}</span>}
-                        {entry.cravingLevel && <span className="text-xs text-muted-foreground">Envie: {entry.cravingLevel}/10</span>}
+                        {entry.strategyTried && <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{entry.strategyTried}</span>}
+                        {entry.peoplePresent && <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{entry.peoplePresent}</span>}
+                        {entry.cravingBefore && <span className="text-xs text-muted-foreground">Envie avant: {entry.cravingBefore}/10</span>}
+                        {entry.cravingAfter && <span className="text-xs text-muted-foreground">après: {entry.cravingAfter}/10</span>}
+                        {entry.cost && <span className="text-xs text-muted-foreground">Coût: {entry.cost} €</span>}
                       </div>
                       {entry.note && <p className="text-sm text-muted-foreground italic mt-1">"{entry.note}"</p>}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-muted-foreground hover:text-destructive shrink-0"
-                      onClick={() => handleDelete(entry.id)}
-                      data-testid={`button-delete-entry-${entry.id}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex shrink-0 gap-1">
+                      <Button variant="ghost" size="icon" className="text-muted-foreground" onClick={() => openEdit(entry)} data-testid={`button-edit-entry-${entry.id}`}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDelete(entry.id)}
+                        data-testid={`button-delete-entry-${entry.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -181,7 +244,7 @@ export default function ConsumptionJournalPage() {
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {form.type === "consommation" ? "Nouvelle entrée de consommation" : "Victoire invisible"}
+              {editingId ? "Modifier l'entrée" : form.type === "consommation" ? "Nouvelle entrée de consommation" : "Victoire invisible"}
             </DialogTitle>
           </DialogHeader>
 
@@ -210,13 +273,44 @@ export default function ConsumptionJournalPage() {
 
             {form.type === "consommation" && (
               <>
+                {activeSubstances.length > 0 && (
+                  <div className="space-y-1">
+                    <Label>Suivi concerné</Label>
+                    <Select
+                      value={form.substanceId || "manual"}
+                      onValueChange={v => {
+                        const substance = substanceTrackings.find(item => item.id === v);
+                        setForm(f => ({
+                          ...f,
+                          substanceId: v === "manual" ? "" : v,
+                          substance: substance?.name ?? f.substance,
+                          unit: substance?.unit ?? f.unit,
+                        }));
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Choisir un suivi" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="manual">Saisie libre</SelectItem>
+                        {activeSubstances.map(substance => (
+                          <SelectItem key={substance.id} value={substance.id}>{substance.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <Label>Substance</Label>
                   <Input placeholder="Alcool, cannabis, tabac..." value={form.substance} onChange={e => setForm(f => ({ ...f, substance: e.target.value }))} data-testid="input-substance" />
                 </div>
-                <div className="space-y-1">
-                  <Label>Quantité approximative</Label>
-                  <Input placeholder="2 verres, 1 joint..." value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
+                <div className="grid grid-cols-[1fr_0.8fr] gap-3">
+                  <div className="space-y-1">
+                    <Label>Quantité</Label>
+                    <Input placeholder="2" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Unité</Label>
+                    <Input placeholder="verre, g, session..." value={form.unit ?? ""} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} />
+                  </div>
                 </div>
               </>
             )}
@@ -264,10 +358,57 @@ export default function ConsumptionJournalPage() {
 
             <div className="space-y-2">
               <div className="flex justify-between">
-                <Label>Niveau d'envie</Label>
-                <span className="text-sm font-semibold text-primary">{form.cravingLevel}/10</span>
+                <Label>Envie avant</Label>
+                <span className="text-sm font-semibold text-primary">{form.cravingBefore ?? form.cravingLevel}/10</span>
               </div>
-              <Slider min={1} max={10} step={1} value={[form.cravingLevel]} onValueChange={([v]) => setForm(f => ({ ...f, cravingLevel: v }))} />
+              <Slider min={1} max={10} step={1} value={[form.cravingBefore ?? form.cravingLevel]} onValueChange={([v]) => setForm(f => ({ ...f, cravingBefore: v, cravingLevel: v }))} />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <Label>Envie après</Label>
+                <span className="text-sm font-semibold text-primary">{form.cravingAfter ?? form.cravingLevel}/10</span>
+              </div>
+              <Slider min={1} max={10} step={1} value={[form.cravingAfter ?? form.cravingLevel]} onValueChange={([v]) => setForm(f => ({ ...f, cravingAfter: v }))} />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Présence d'autres personnes</Label>
+              <Select value={form.peoplePresent} onValueChange={v => setForm(f => ({ ...f, peoplePresent: v }))}>
+                <SelectTrigger><SelectValue placeholder="Qui était présent ?" /></SelectTrigger>
+                <SelectContent>
+                  {PEOPLE.map(item => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Stratégie essayée</Label>
+              <Select value={form.strategyTried} onValueChange={v => setForm(f => ({ ...f, strategyTried: v }))}>
+                <SelectTrigger><SelectValue placeholder="Ce que tu as essayé" /></SelectTrigger>
+                <SelectContent>
+                  {STRATEGIES.map(item => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {form.type === "consommation" && (
+              <div className="space-y-1">
+                <Label>Coût facultatif</Label>
+                <Input type="number" min={0} step="0.01" inputMode="decimal" placeholder="0" value={form.cost ?? ""} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} />
+              </div>
+            )}
+
+            <div className="flex items-start gap-3 rounded-md bg-muted/35 p-3">
+              <Checkbox
+                id="retrospective-entry"
+                checked={(form.createdAt ?? "").slice(0, 10) > form.date}
+                disabled
+              />
+              <div className="space-y-0.5">
+                <Label htmlFor="retrospective-entry">Saisie rétroactive détectée</Label>
+                <p className="text-xs text-muted-foreground">Si la date concernée est passée, l'entrée garde sa date réelle et sa date de création.</p>
+              </div>
             </div>
 
             <div className="space-y-1">
@@ -276,11 +417,87 @@ export default function ConsumptionJournalPage() {
             </div>
 
             <Button className="w-full" onClick={handleSave} data-testid="button-save-consumption">
-              Enregistrer
+              {editingId ? "Mettre à jour" : "Enregistrer"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!supportEntry} onOpenChange={openState => !openState && setSupportEntry(null)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Après une consommation</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5">
+            <div className="rounded-md bg-primary/5 p-3 text-sm text-muted-foreground">
+              Un événement ponctuel ne signifie pas que tout le parcours est abandonné. Le calendrier l'indique clairement, et les compteurs restent explicables.
+            </div>
+
+            <section className="space-y-3">
+              <h3 className="flex items-center gap-2 font-medium"><ShieldAlert className="h-4 w-4 text-destructive" /> Sécurité immédiate</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant={safeNow === true ? "default" : "outline"} onClick={() => setSafeNow(true)}>Je suis en sécurité</Button>
+                <Button variant={safeNow === false ? "destructive" : "outline"} onClick={() => setSafeNow(false)}>Je ne suis pas sûr(e)</Button>
+              </div>
+              <label className="flex items-start gap-3 rounded-md bg-muted/35 p-3 text-sm">
+                <Checkbox checked={worryingSymptoms} onCheckedChange={checked => setWorryingSymptoms(checked === true)} />
+                Symptômes inquiétants ou quantité possiblement dangereuse
+              </label>
+              {(safeNow === false || worryingSymptoms) && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                  En cas de danger immédiat, de symptômes graves ou d'impossibilité de rester en sécurité, appelle le 112 et ne reste pas seul(e).
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-3">
+              <h3 className="flex items-center gap-2 font-medium"><HeartHandshake className="h-4 w-4 text-primary" /> Tes repères</h3>
+              <div className="grid gap-3 text-sm">
+                <SupportBlock label="Raisons personnelles" text={safetyPlan.reasons || "À compléter dans le plan de protection."} />
+                <SupportBlock label="Stratégies enregistrées" text={safetyPlan.strategies || "À compléter dans le plan de protection."} />
+                <SupportBlock label="Phrase utile" text={safetyPlan.helpfulPhrases || "Cette envie va passer."} />
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <h3 className="flex items-center gap-2 font-medium"><Phone className="h-4 w-4 text-primary" /> Cercle de confiance</h3>
+              {contacts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Ajoute un contact de confiance pour le retrouver ici. CleanPath n'envoie jamais de message automatiquement.</p>
+              ) : (
+                <div className="space-y-2">
+                  {contacts.slice(0, 3).map(contact => (
+                    <div key={contact.id} className="rounded-md border border-border p-3 text-sm">
+                      <p className="font-medium">{contact.name}</p>
+                      <p className="text-muted-foreground">{contact.relationship} · {contact.phone}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-3">
+              <h3 className="flex items-center gap-2 font-medium"><CalendarCheck className="h-4 w-4 text-primary" /> Prochaine petite action</h3>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {["Boire de l'eau", "Changer de lieu", "Respirer 2 minutes", "Prévenir quelqu'un"].map(action => (
+                  <div key={action} className="rounded-md bg-muted/35 p-3 text-sm">{action}</div>
+                ))}
+              </div>
+              <Button variant="outline" className="w-full" onClick={planTomorrowCheckIn} disabled={checkInPlanned}>
+                {checkInPlanned ? "Check-in de demain planifié" : "Planifier un check-in demain"}
+              </Button>
+            </section>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function SupportBlock({ label, text }: { label: string; text: string }) {
+  return (
+    <div className="rounded-md bg-muted/35 p-3">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="mt-1 whitespace-pre-wrap">{text}</p>
     </div>
   );
 }
