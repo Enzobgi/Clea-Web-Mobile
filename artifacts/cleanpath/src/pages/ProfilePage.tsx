@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
 const emptyAppointment = (): CareAppointment => ({
@@ -50,6 +51,13 @@ export default function ProfilePage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Prochain rendez-vous"><Input type="date" value={draft.date} onChange={event => updateAppointment({ date: event.target.value })} /></Field>
             <Field label="Type de professionnel"><Input value={draft.professionalType} onChange={event => updateAppointment({ professionalType: event.target.value })} placeholder="Psychologue, médecin, addictologue..." /></Field>
+            <div className="flex items-center justify-between gap-3 rounded-md bg-muted/35 p-3 sm:col-span-2">
+              <div className="space-y-0.5">
+                <Label>Rappel discret avant rendez-vous</Label>
+                <p className="text-xs text-muted-foreground">Affiché dans CleanPath, sans notification explicite par défaut.</p>
+              </div>
+              <Switch checked={draft.reminderEnabled} onCheckedChange={reminderEnabled => updateAppointment({ reminderEnabled })} />
+            </div>
             <div className="sm:col-span-2"><Field label="Notes à aborder"><Textarea value={draft.notesToDiscuss} onChange={event => updateAppointment({ notesToDiscuss: event.target.value })} /></Field></div>
             <div className="sm:col-span-2"><Field label="Objectifs convenus"><Textarea value={draft.agreedObjectives} onChange={event => updateAppointment({ agreedObjectives: event.target.value })} /></Field></div>
             <div className="sm:col-span-2"><Field label="Résumé après rendez-vous"><Textarea value={draft.summaryAfter} onChange={event => updateAppointment({ summaryAfter: event.target.value })} /></Field></div>

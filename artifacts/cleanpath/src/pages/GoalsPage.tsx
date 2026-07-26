@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
@@ -22,6 +23,14 @@ const emptyTracking = (): Omit<SubstanceTracking, "id"> => ({
   dailyLimit: "",
   weeklyLimit: "",
   usualFrequency: "",
+  reductionPlan: {
+    startAmount: "",
+    targetAmount: "",
+    weeklyStep: "",
+    difficultPeriods: "",
+    replacementStrategies: "",
+    optionalSavingsPerUnit: "",
+  },
   archivedAt: null,
 });
 
@@ -88,6 +97,12 @@ export default function GoalsPage() {
     ));
   };
 
+  const updateTracking = (id: string, patch: Partial<SubstanceTracking>) => {
+    setSubstanceTrackings(substanceTrackings.map(tracking =>
+      tracking.id === id ? { ...tracking, ...patch } : tracking
+    ));
+  };
+
   const sortedGoals = [...goals].sort((a, b) => a.days - b.days);
 
   return (
@@ -136,6 +151,18 @@ export default function GoalsPage() {
                 const value = Number.parseFloat(String(entry.quantity).replace(",", "."));
                 return Number.isFinite(value) ? sum + value : sum;
               }, 0);
+              const plan = tracking.reductionPlan ?? emptyTracking().reductionPlan!;
+              const plannedNow = plannedAmountForToday(tracking);
+              const last7Quantity = entries
+                .filter(entry => entry.date >= daysAgo(6))
+                .reduce((sum, entry) => {
+                  const value = Number.parseFloat(String(entry.quantity).replace(",", "."));
+                  return Number.isFinite(value) ? sum + value : sum;
+                }, 0);
+              const savings = Number.parseFloat(plan.optionalSavingsPerUnit.replace(",", "."));
+              const estimatedSavings = Number.isFinite(savings) && plan.startAmount
+                ? Math.max(0, (Number(plan.startAmount.replace(",", ".")) * 7 - last7Quantity) * savings)
+                : null;
               return (
                 <Card key={tracking.id}>
                   <CardContent className="p-4 space-y-3">
@@ -155,6 +182,43 @@ export default function GoalsPage() {
                       <Info label="Quantité totale" value={totalQuantity > 0 ? `${formatNumber(totalQuantity)} ${tracking.unit}` : "Non chiffrée"} />
                       <Info label="Plafond" value={tracking.dailyLimit ? `${tracking.dailyLimit} ${tracking.unit}/jour` : tracking.weeklyLimit ? `${tracking.weeklyLimit} ${tracking.unit}/semaine` : "Non défini"} />
                     </div>
+                    {tracking.objective === "reduction" && (
+                      <div className="space-y-3 rounded-md bg-muted/35 p-3">
+                        <div className="grid gap-2 sm:grid-cols-3 text-sm">
+                          <Info label="Plan aujourd'hui" value={plannedNow === null ? "À configurer" : `${formatNumber(plannedNow)} ${tracking.unit}/jour`} />
+                          <Info label="Réel 7 jours" value={last7Quantity > 0 ? `${formatNumber(last7Quantity)} ${tracking.unit}` : "Aucune quantité"} />
+                          <Info label="Économies estimées" value={estimatedSavings === null ? "Facultatif" : `${formatNumber(estimatedSavings)} €`} />
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <PlanField label="Départ" value={plan.startAmount} onChange={startAmount => updateTracking(tracking.id, { reductionPlan: { ...plan, startAmount, adjustedAt: new Date().toISOString() } })} unit={tracking.unit} />
+                          <PlanField label="Objectif final" value={plan.targetAmount} onChange={targetAmount => updateTracking(tracking.id, { reductionPlan: { ...plan, targetAmount, adjustedAt: new Date().toISOString() } })} unit={tracking.unit} />
+                          <PlanField label="Étape hebdo" value={plan.weeklyStep} onChange={weeklyStep => updateTracking(tracking.id, { reductionPlan: { ...plan, weeklyStep, adjustedAt: new Date().toISOString() } })} unit={tracking.unit} />
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">Périodes plus difficiles</Label>
+                            <Textarea className="min-h-20" value={plan.difficultPeriods} onChange={event => updateTracking(tracking.id, { reductionPlan: { ...plan, difficultPeriods: event.target.value, adjustedAt: new Date().toISOString() } })} placeholder="Ex : vendredi soir, hiver, après le travail..." />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">Stratégies de remplacement</Label>
+                            <Textarea className="min-h-20" value={plan.replacementStrategies} onChange={event => updateTracking(tracking.id, { reductionPlan: { ...plan, replacementStrategies: event.target.value, adjustedAt: new Date().toISOString() } })} placeholder="Ex : marche, boisson sans alcool, appel..." />
+                          </div>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">Économie par unité (€)</Label>
+                            <Input value={plan.optionalSavingsPerUnit} onChange={event => updateTracking(tracking.id, { reductionPlan: { ...plan, optionalSavingsPerUnit: event.target.value, adjustedAt: new Date().toISOString() } })} />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">Note d'ajustement</Label>
+                            <Input value={plan.adjustmentNote ?? ""} onChange={event => updateTracking(tracking.id, { reductionPlan: { ...plan, adjustmentNote: event.target.value, adjustedAt: new Date().toISOString() } })} placeholder="Ajustement normal du plan" />
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Ajuster ce plan sert à rester réaliste. Ce n'est pas enregistré comme un échec.
+                        </p>
+                      </div>
+                    )}
                     {tracking.usualFrequency && <p className="text-xs text-muted-foreground">Fréquence habituelle : {tracking.usualFrequency}</p>}
                   </CardContent>
                 </Card>
@@ -319,6 +383,18 @@ export default function GoalsPage() {
               <Label>Fréquence habituelle</Label>
               <Input value={trackingDraft.usualFrequency} onChange={event => setTrackingDraft({ ...trackingDraft, usualFrequency: event.target.value })} placeholder="Ex : surtout le soir, 5 jours/semaine..." />
             </div>
+            {trackingDraft.objective === "reduction" && (
+              <div className="space-y-3 rounded-md bg-muted/35 p-3">
+                <p className="text-sm font-medium">Plan de réduction progressif</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <Input placeholder="Départ" value={trackingDraft.reductionPlan?.startAmount ?? ""} onChange={event => setTrackingDraft({ ...trackingDraft, reductionPlan: { ...trackingDraft.reductionPlan!, startAmount: event.target.value } })} />
+                  <Input placeholder="Final" value={trackingDraft.reductionPlan?.targetAmount ?? ""} onChange={event => setTrackingDraft({ ...trackingDraft, reductionPlan: { ...trackingDraft.reductionPlan!, targetAmount: event.target.value } })} />
+                  <Input placeholder="Étape/sem." value={trackingDraft.reductionPlan?.weeklyStep ?? ""} onChange={event => setTrackingDraft({ ...trackingDraft, reductionPlan: { ...trackingDraft.reductionPlan!, weeklyStep: event.target.value } })} />
+                </div>
+                <Textarea placeholder="Jours ou périodes plus difficiles" value={trackingDraft.reductionPlan?.difficultPeriods ?? ""} onChange={event => setTrackingDraft({ ...trackingDraft, reductionPlan: { ...trackingDraft.reductionPlan!, difficultPeriods: event.target.value } })} />
+                <Textarea placeholder="Stratégies de remplacement" value={trackingDraft.reductionPlan?.replacementStrategies ?? ""} onChange={event => setTrackingDraft({ ...trackingDraft, reductionPlan: { ...trackingDraft.reductionPlan!, replacementStrategies: event.target.value } })} />
+              </div>
+            )}
             <Button className="w-full" onClick={addTracking}>Enregistrer ce suivi</Button>
           </div>
         </DialogContent>
@@ -335,6 +411,38 @@ function objectiveLabel(objective: SubstanceTracking["objective"]) {
 
 function formatNumber(value: number) {
   return value.toFixed(value % 1 === 0 ? 0 : 1).replace(".", ",");
+}
+
+function daysAgo(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+function plannedAmountForToday(tracking: SubstanceTracking) {
+  const plan = tracking.reductionPlan;
+  if (!plan?.startAmount || !plan.targetAmount || !plan.weeklyStep) return null;
+  const start = Number.parseFloat(plan.startAmount.replace(",", "."));
+  const target = Number.parseFloat(plan.targetAmount.replace(",", "."));
+  const weeklyStep = Number.parseFloat(plan.weeklyStep.replace(",", "."));
+  if (![start, target, weeklyStep].every(Number.isFinite) || weeklyStep <= 0) return null;
+  const elapsedDays = Math.max(0, Math.floor((Date.now() - new Date(`${tracking.startDate}T00:00:00`).getTime()) / 86_400_000));
+  const elapsedWeeks = Math.floor(elapsedDays / 7);
+  const direction = start >= target ? -1 : 1;
+  const planned = start + direction * weeklyStep * elapsedWeeks;
+  return direction < 0 ? Math.max(target, planned) : Math.min(target, planned);
+}
+
+function PlanField({ label, value, unit, onChange }: { label: string; value: string; unit: string; onChange: (value: string) => void }) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <div className="flex items-center gap-2">
+        <Input value={value} onChange={event => onChange(event.target.value)} />
+        <span className="shrink-0 text-xs text-muted-foreground">{unit || "unité"}</span>
+      </div>
+    </div>
+  );
 }
 
 function Info({ label, value }: { label: string; value: string }) {

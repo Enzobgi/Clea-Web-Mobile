@@ -31,7 +31,7 @@ function passwordStrength(password: string) {
 }
 
 export function WelcomeScreen() {
-  const { login, register } = useUser();
+  const { login, register, isLoading, authNotice } = useUser();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -92,6 +92,11 @@ export function WelcomeScreen() {
           <p className="text-muted-foreground">
             {mode === "login" ? "Retrouve ton espace personnel." : "Crée ton espace confidentiel."}
           </p>
+          {isLoading && (
+            <p className="text-xs text-muted-foreground" role="status">
+              Vérification rapide de la session en cours…
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 border border-border rounded-md p-1">
@@ -188,6 +193,7 @@ export function WelcomeScreen() {
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
+          {authNotice && <p className="text-sm text-muted-foreground">{authNotice}</p>}
           {forgotSent && (
             <p className="text-sm text-primary">
               Si un compte existe avec cette adresse, la procédure de réinitialisation est préparée. L'envoi email reste à configurer côté serveur.

@@ -124,7 +124,7 @@ export default function DemoPage() {
           </div>
         </section>
 
-        <nav className="grid grid-cols-3 gap-2 sm:grid-cols-6" aria-label="Navigation de la démo">
+        <nav className="sticky top-24 z-10 grid grid-cols-3 gap-2 rounded-md border border-border bg-background/95 p-2 backdrop-blur sm:grid-cols-6" aria-label="Navigation de la démo">
           <DemoNav href="#aujourdhui" icon={Heart} label="Aujourd'hui" />
           <DemoNav href="#journal" icon={BookOpen} label="Journal" />
           <DemoNav href="#sos" icon={HeartPulse} label="SOS" />

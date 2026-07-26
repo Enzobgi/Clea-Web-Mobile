@@ -31,14 +31,18 @@ import { useUser } from "@/store/UserContext";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const { settings } = useAppStore();
+  const { settings, remoteSyncStatus } = useAppStore();
   const { currentUser, logout } = useUser();
   const title = settings.discreteMode ? "Journal" : "CleanPath";
+  const syncMessage = syncStatusMessage(remoteSyncStatus);
 
   return (
     <div className="flex h-[100dvh] flex-col bg-background">
       <header className="hidden h-16 items-center justify-between border-b border-border px-6 md:flex">
-        <h1 className="text-xl font-medium text-foreground">{title}</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-medium text-foreground">{title}</h1>
+          {syncMessage && <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">{syncMessage}</span>}
+        </div>
         <UserMenu currentUser={currentUser} logout={logout} />
       </header>
 
@@ -62,7 +66,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <NavItem href="/parametres" icon={Settings} label="Paramètres" active={location === "/parametres"} />
         </aside>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+          {syncMessage && <div className="mb-3 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground md:hidden">{syncMessage}</div>}
+          {children}
+        </main>
       </div>
 
       <nav className="flex h-16 shrink-0 items-center justify-around border-t border-border bg-card px-2 pb-safe md:hidden">
@@ -76,6 +83,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </nav>
     </div>
   );
+}
+
+function syncStatusMessage(status: string) {
+  if (status === "pending") return "Sauvegarde en cours";
+  if (status === "offline") return "Hors ligne, données gardées ici";
+  if (status === "error") return "Synchronisation à vérifier";
+  if (status === "loading") return "Chargement des données";
+  return null;
 }
 
 function UserMenu({ currentUser, logout }: { currentUser: string | null; logout: () => Promise<void> }) {

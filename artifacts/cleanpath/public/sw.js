@@ -1,5 +1,14 @@
-const CACHE_NAME = "cleanpath-shell-v1";
-const ESSENTIALS = ["/", "/offline.html", "/manifest.webmanifest", "/favicon.svg"];
+const CACHE_NAME = "cleanpath-shell-v2";
+const ESSENTIALS = [
+  "/",
+  "/sos",
+  "/urgence",
+  "/plan-securite",
+  "/contacts",
+  "/offline.html",
+  "/manifest.webmanifest",
+  "/favicon.svg",
+];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ESSENTIALS)));
@@ -27,7 +36,9 @@ self.addEventListener("fetch", event => {
       .catch(async () => {
         const cached = await caches.match(event.request);
         if (cached) return cached;
-        if (event.request.mode === "navigate") return caches.match("/offline.html");
+        if (event.request.mode === "navigate") {
+          return caches.match("/") || caches.match("/offline.html");
+        }
         return Response.error();
       })
   );

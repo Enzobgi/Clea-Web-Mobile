@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { AlertCircle, Download, Euro, TrendingUp } from "lucide-react";
+import { AlertCircle, Bell, CalendarClock, Download, Euro, TrendingUp } from "lucide-react";
 import { eachDayOfInterval, endOfMonth, format, isSameDay, startOfMonth } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useEffect, useState } from "react";
@@ -30,7 +30,18 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export default function Home() {
-  const { dayEntries, setDayEntries, consumptions, settings, emotions, profile } = useAppStore();
+  const {
+    dayEntries,
+    setDayEntries,
+    consumptions,
+    settings,
+    setSettings,
+    emotions,
+    profile,
+    plannedCheckIns,
+    careAppointments,
+    substanceTrackings,
+  } = useAppStore();
   const { currentUser } = useUser();
   const today = new Date();
   const days = eachDayOfInterval({ start: startOfMonth(today), end: endOfMonth(today) });
@@ -42,6 +53,15 @@ export default function Home() {
   const greeting = hour < 5 ? "Bonne nuit" : hour < 12 ? "Bonjour" : hour < 18 ? "Bon après-midi" : "Bonsoir";
   const name = profile.nickname || currentUser || "";
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const todayStr = format(today, "yyyy-MM-dd");
+  const reminders = settings.allNotificationsDisabled ? [] : buildReminders({
+    todayStr,
+    plannedCheckIns,
+    careAppointments,
+    substanceTrackings,
+    postponed: settings.postponedReminders ?? {},
+    appointmentReminderDaysBefore: settings.appointmentReminderDaysBefore ?? 1,
+  });
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -58,6 +78,18 @@ export default function Home() {
     const statuses = ["abstinent", "consommation", "envie_forte", "non_renseigne"] as const;
     const current = getDayStatus(date, dayEntries, consumptions);
     setDayEntries(upsertDayEntriesForDates(dayEntries, [date], statuses[(statuses.indexOf(current) + 1) % statuses.length]));
+  };
+
+  const postponeReminder = (id: string) => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    setSettings({
+      ...settings,
+      postponedReminders: {
+        ...(settings.postponedReminders ?? {}),
+        [id]: tomorrow.toISOString().slice(0, 10),
+      },
+    });
   };
 
   return (
@@ -83,6 +115,41 @@ export default function Home() {
       </div>
 
       <Link href="/urgence"><Button size="lg" className="h-16 w-full gap-3 bg-destructive text-base hover:bg-destructive/90"><AlertCircle className="h-5 w-5" />J'ai une envie forte</Button></Link>
+
+      {reminders.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium uppercase text-muted-foreground">
+              <Bell className="h-4 w-4 text-primary" />
+              Rappels discrets
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {reminders.map(reminder => (
+              <div key={reminder.id} className="rounded-md bg-muted/35 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">{reminder.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{reminder.text}</p>
+                  </div>
+                  <CalendarClock className="h-4 w-4 shrink-0 text-primary" />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={reminder.href}>Ouvrir</Link>
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => postponeReminder(reminder.id)}>
+                    Reporter
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground">
+              Les rappels restent discrets et ne mentionnent pas explicitement une consommation.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {installPrompt && (
         <Button
@@ -117,4 +184,62 @@ export default function Home() {
       <Card className="border-none bg-muted/30"><CardContent className="p-5 text-center"><p className="italic text-muted-foreground">"{QUOTES[today.getDate() % QUOTES.length]}"</p></CardContent></Card>
     </div>
   );
+}
+
+function buildReminders({
+  todayStr,
+  plannedCheckIns,
+  careAppointments,
+  substanceTrackings,
+  postponed,
+  appointmentReminderDaysBefore,
+}: {
+  todayStr: string;
+  plannedCheckIns: Array<{ id: string; date: string; completedAt: string | null }>;
+  careAppointments: Array<{ id: string; date: string; professionalType: string; reminderEnabled: boolean }>;
+  substanceTrackings: Array<{ id: string; name: string; objective: string; archivedAt: string | null; reductionPlan?: { difficultPeriods: string } }>;
+  postponed: Record<string, string>;
+  appointmentReminderDaysBefore: number;
+}) {
+  const visible = (id: string) => !postponed[id] || postponed[id] <= todayStr;
+  const reminders: Array<{ id: string; title: string; text: string; href: string }> = [];
+
+  plannedCheckIns
+    .filter(checkIn => !checkIn.completedAt && checkIn.date <= todayStr && visible(`checkin-${checkIn.id}`))
+    .slice(0, 2)
+    .forEach(checkIn => reminders.push({
+      id: `checkin-${checkIn.id}`,
+      title: "Check-in prévu",
+      text: "Un point doux était prévu aujourd'hui. Tu peux le faire maintenant ou le reporter.",
+      href: "/journal-emotionnel",
+    }));
+
+  careAppointments
+    .filter(appointment => appointment.reminderEnabled && visible(`appointment-${appointment.id}`))
+    .filter(appointment => daysUntil(appointment.date, todayStr) <= appointmentReminderDaysBefore && daysUntil(appointment.date, todayStr) >= 0)
+    .slice(0, 2)
+    .forEach(appointment => reminders.push({
+      id: `appointment-${appointment.id}`,
+      title: "Rendez-vous à préparer",
+      text: appointment.professionalType
+        ? `Préparer quelques notes pour le rendez-vous avec ${appointment.professionalType}.`
+        : "Préparer quelques notes pour le prochain rendez-vous.",
+      href: "/profil",
+    }));
+
+  substanceTrackings
+    .filter(tracking => !tracking.archivedAt && tracking.objective === "reduction" && tracking.reductionPlan?.difficultPeriods && visible(`difficult-${tracking.id}`))
+    .slice(0, 1)
+    .forEach(tracking => reminders.push({
+      id: `difficult-${tracking.id}`,
+      title: "Période sensible à anticiper",
+      text: `Pour ${tracking.name}, relis tes stratégies de remplacement avant une période difficile.`,
+      href: "/objectifs",
+    }));
+
+  return reminders.slice(0, 4);
+}
+
+function daysUntil(date: string, today: string) {
+  return Math.ceil((new Date(`${date}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86_400_000);
 }

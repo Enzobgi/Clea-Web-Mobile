@@ -61,6 +61,16 @@ export interface SubstanceTracking {
   dailyLimit: string;
   weeklyLimit: string;
   usualFrequency: string;
+  reductionPlan?: {
+    startAmount: string;
+    targetAmount: string;
+    weeklyStep: string;
+    difficultPeriods: string;
+    replacementStrategies: string;
+    optionalSavingsPerUnit: string;
+    adjustedAt?: string;
+    adjustmentNote?: string;
+  };
   archivedAt: string | null;
 }
 
@@ -146,6 +156,11 @@ export interface AppSettings {
   quietHoursEnd?: string;
   discreetNotificationText?: string;
   allNotificationsDisabled?: boolean;
+  checkInReminderTime?: string;
+  difficultPeriodReminderTime?: string;
+  appointmentReminderDaysBefore?: number;
+  notificationFrequency?: "quotidienne" | "jours_difficiles" | "rendez_vous" | "manuelle";
+  postponedReminders?: Record<string, string>;
 }
 
 const defaultSettings: AppSettings = {
@@ -158,6 +173,11 @@ const defaultSettings: AppSettings = {
   quietHoursEnd: "08:00",
   discreetNotificationText: "CleanPath: un petit point prévu.",
   allNotificationsDisabled: false,
+  checkInReminderTime: "19:00",
+  difficultPeriodReminderTime: "17:30",
+  appointmentReminderDaysBefore: 1,
+  notificationFrequency: "quotidienne",
+  postponedReminders: {},
 };
 
 const defaultProfile: UserProfile = {
@@ -199,6 +219,8 @@ const STORE_UPDATE_EVENT = "cleanpath-store-update";
 const remoteLoadPromises = new Map<string, Promise<Record<string, unknown>>>();
 const remoteSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const remoteSaveChains = new Map<string, Promise<void>>();
+
+export type RemoteSyncStatus = "local" | "loading" | "synced" | "pending" | "offline" | "error";
 
 const dataSuffixes = [
   "sessions",
@@ -281,22 +303,37 @@ async function saveRemoteData(userId: string, data: Record<string, unknown>) {
     body: JSON.stringify({ data }),
   });
   if (!response.ok) throw new Error("Impossible de synchroniser les données.");
+  return response.json() as Promise<{ updatedAt?: string | null }>;
 }
 
-function scheduleRemoteSave(userId: string, data: Record<string, unknown>) {
+function scheduleRemoteSave(
+  userId: string,
+  data: Record<string, unknown>,
+  onStatus: (status: RemoteSyncStatus) => void,
+  onSynced: (updatedAt: string) => void,
+) {
   const existingTimer = remoteSaveTimers.get(userId);
   if (existingTimer) clearTimeout(existingTimer);
+  if (!navigator.onLine) {
+    onStatus("offline");
+    return;
+  }
+  onStatus("pending");
   remoteSaveTimers.set(userId, setTimeout(() => {
     remoteSaveTimers.delete(userId);
     const previousSave = remoteSaveChains.get(userId) ?? Promise.resolve();
     const nextSave = previousSave
       .catch(() => undefined)
-      .then(() => saveRemoteData(userId, data));
+      .then(() => saveRemoteData(userId, data))
+      .then(result => {
+        onSynced(result.updatedAt ?? new Date().toISOString());
+        onStatus("synced");
+      });
 
     remoteSaveChains.set(userId, nextSave);
     void nextSave
       .catch(() => {
-        // The local copy remains available and a later edit will retry.
+        onStatus(navigator.onLine ? "error" : "offline");
       })
       .finally(() => {
         if (remoteSaveChains.get(userId) === nextSave) {
@@ -341,6 +378,8 @@ function useAppStoreState() {
   const legacyPrefix = currentUser ? getUserStoragePrefix(currentUser) : "cleanpath_guest";
   const { vaultPresent, vaultData, saveData } = useVault();
   const [remoteReady, setRemoteReady] = useState(false);
+  const [remoteSyncStatus, setRemoteSyncStatus] = useState<RemoteSyncStatus>(user ? "loading" : "local");
+  const [lastRemoteSyncAt, setLastRemoteSyncAt] = useState<string | null>(null);
 
   const [sessions, setSessions_] = useState<AbstractionSession[]>(
     () => readFromStorage(`${prefix}_sessions`, [], vaultData, vaultPresent)
@@ -423,11 +462,13 @@ function useAppStoreState() {
   useEffect(() => {
     if (!user) {
       setRemoteReady(false);
+      setRemoteSyncStatus("local");
       return;
     }
 
     let active = true;
     setRemoteReady(false);
+    setRemoteSyncStatus("loading");
 
     loadRemoteData(user.id, prefix, legacyPrefix)
       .then(data => {
@@ -493,9 +534,14 @@ function useAppStoreState() {
         setChatMemory_(nextChatMemory);
         setSettings_(nextSettings);
         setRemoteReady(true);
+        setLastRemoteSyncAt(new Date().toISOString());
+        setRemoteSyncStatus("synced");
       })
       .catch(() => {
-        if (active) setRemoteReady(true);
+        if (active) {
+          setRemoteReady(true);
+          setRemoteSyncStatus(navigator.onLine ? "error" : "offline");
+        }
       });
 
     return () => {
@@ -612,7 +658,7 @@ function useAppStoreState() {
       programProgress,
       chatMemory,
       settings,
-    });
+    }, setRemoteSyncStatus, setLastRemoteSyncAt);
   }, [
     user?.id,
     remoteReady,
@@ -635,8 +681,24 @@ function useAppStoreState() {
     settings,
   ]);
 
+  useEffect(() => {
+    if (!user || !remoteReady) return;
+    const retry = () => {
+      scheduleRemoteSave(user.id, stateRef.current, setRemoteSyncStatus, setLastRemoteSyncAt);
+    };
+    const markOffline = () => setRemoteSyncStatus("offline");
+    window.addEventListener("online", retry);
+    window.addEventListener("offline", markOffline);
+    return () => {
+      window.removeEventListener("online", retry);
+      window.removeEventListener("offline", markOffline);
+    };
+  }, [user?.id, remoteReady]);
+
   return {
     isReady: !user || remoteReady,
+    remoteSyncStatus,
+    lastRemoteSyncAt,
     prefix,
     sessions, setSessions,
     dayEntries, setDayEntries,
@@ -664,14 +726,6 @@ const AppStoreContext = createContext<AppStoreValue | null>(null);
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const store = useAppStoreState();
-
-  if (!store.isReady) {
-    return (
-      <div className="min-h-[100dvh] flex items-center justify-center bg-background">
-        <p className="text-sm text-muted-foreground">Synchronisation de ton espace...</p>
-      </div>
-    );
-  }
 
   return (
     <AppStoreContext.Provider value={store}>

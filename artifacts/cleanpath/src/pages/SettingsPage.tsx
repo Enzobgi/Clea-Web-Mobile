@@ -57,6 +57,8 @@ export default function SettingsPage() {
     safetyPlan,
     setGratitudes,
     setCravings,
+    remoteSyncStatus,
+    lastRemoteSyncAt,
   } = store;
   const { currentUser, user, logout } = useUser();
   const { vaultPresent, enableVault, disableVault, vaultData } = useVault();
@@ -74,6 +76,9 @@ export default function SettingsPage() {
   const [appointmentNotes, setAppointmentNotes] = useState("");
   const [sessions, setSessions] = useState<AccountSession[]>([]);
   const [sessionsMessage, setSessionsMessage] = useState("");
+  const [notificationPermission, setNotificationPermission] = useState(
+    typeof Notification === "undefined" ? "unsupported" : Notification.permission,
+  );
 
   useEffect(() => {
     document.title = settings.discreteMode ? "Journal" : "CleanPath";
@@ -190,6 +195,15 @@ export default function SettingsPage() {
     }
   };
 
+  const requestNotificationPermission = async () => {
+    if (typeof Notification === "undefined") {
+      setNotificationPermission("unsupported");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-500 pb-12">
       <header className="space-y-1">
@@ -240,7 +254,16 @@ export default function SettingsPage() {
             <p className="mt-2">
               Journaux, calendrier, suivis par produit, plan de protection, contacts de confiance, objectifs, préférences et mémoire du chat si elle est activée.
             </p>
-            <p className="mt-2">Dernière synchronisation connue : après la dernière modification enregistrée sur ce compte.</p>
+            <p className="mt-2">
+              État de synchronisation : <strong className="text-foreground">{syncLabel(remoteSyncStatus)}</strong>
+              {lastRemoteSyncAt && ` · dernière réussite le ${new Date(lastRemoteSyncAt).toLocaleString("fr-BE")}`}.
+            </p>
+            {remoteSyncStatus === "offline" && (
+              <p className="mt-2 text-primary">Les données restent disponibles sur cet appareil et seront renvoyées au retour de la connexion.</p>
+            )}
+            {remoteSyncStatus === "error" && (
+              <p className="mt-2 text-destructive">La dernière sauvegarde serveur n'a pas abouti. La copie locale est conservée.</p>
+            )}
           </div>
 
           <div className="flex items-center justify-between">
@@ -375,7 +398,30 @@ export default function SettingsPage() {
               onCheckedChange={allNotificationsDisabled => setSettings({ ...settings, allNotificationsDisabled })}
             />
           </div>
+          <div className="space-y-1.5">
+            <Label>Fréquence</Label>
+            <Select
+              value={settings.notificationFrequency ?? "quotidienne"}
+              onValueChange={notificationFrequency => setSettings({ ...settings, notificationFrequency: notificationFrequency as typeof settings.notificationFrequency })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="quotidienne">Rappel quotidien de check-in</SelectItem>
+                <SelectItem value="jours_difficiles">Seulement périodes difficiles</SelectItem>
+                <SelectItem value="rendez_vous">Seulement rendez-vous</SelectItem>
+                <SelectItem value="manuelle">Manuel uniquement</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Rappel check-in</Label>
+              <Input type="time" value={settings.checkInReminderTime ?? "19:00"} onChange={event => setSettings({ ...settings, checkInReminderTime: event.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Avant période difficile</Label>
+              <Input type="time" value={settings.difficultPeriodReminderTime ?? "17:30"} onChange={event => setSettings({ ...settings, difficultPeriodReminderTime: event.target.value })} />
+            </div>
             <div className="space-y-1.5">
               <Label>Début heures silencieuses</Label>
               <Input type="time" value={settings.quietHoursStart ?? "22:00"} onChange={event => setSettings({ ...settings, quietHoursStart: event.target.value })} />
@@ -383,6 +429,16 @@ export default function SettingsPage() {
             <div className="space-y-1.5">
               <Label>Fin heures silencieuses</Label>
               <Input type="time" value={settings.quietHoursEnd ?? "08:00"} onChange={event => setSettings({ ...settings, quietHoursEnd: event.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Rendez-vous</Label>
+              <Input
+                type="number"
+                min={0}
+                max={14}
+                value={settings.appointmentReminderDaysBefore ?? 1}
+                onChange={event => setSettings({ ...settings, appointmentReminderDaysBefore: Number(event.target.value) || 0 })}
+              />
             </div>
           </div>
           <div className="space-y-1.5">
@@ -394,6 +450,9 @@ export default function SettingsPage() {
             />
             <p className="text-xs text-muted-foreground">Par défaut, aucune notification ne mentionne explicitement la consommation sur l'écran verrouillé.</p>
           </div>
+          <Button variant="outline" onClick={() => void requestNotificationPermission()} disabled={notificationPermission === "granted" || notificationPermission === "unsupported"}>
+            {notificationPermission === "granted" ? "Notifications système autorisées" : notificationPermission === "unsupported" ? "Notifications non disponibles" : "Autoriser les notifications système"}
+          </Button>
         </CardContent>
       </Card>
 
@@ -582,3 +641,20 @@ const sectionLabels: Record<keyof TherapeuticExportSections, string> = {
   personalSummary: "Résumé personnel",
   appointmentNotes: "Notes préparatoires",
 };
+
+function syncLabel(status: string) {
+  switch (status) {
+    case "loading":
+      return "chargement";
+    case "pending":
+      return "sauvegarde en attente";
+    case "offline":
+      return "hors ligne";
+    case "error":
+      return "erreur de synchronisation";
+    case "synced":
+      return "à jour";
+    default:
+      return "local";
+  }
+}

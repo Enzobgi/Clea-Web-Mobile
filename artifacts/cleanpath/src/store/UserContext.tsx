@@ -10,6 +10,7 @@ interface UserContextType {
   user: AccountUser | null;
   currentUser: string | null;
   isLoading: boolean;
+  authNotice: string;
   login: (email: string, password: string) => Promise<void>;
   register: (displayName: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -43,23 +44,33 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AccountUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authNotice, setAuthNotice] = useState("");
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 4500);
 
-    apiRequest<{ user: AccountUser }>("/auth/me")
+    apiRequest<{ user: AccountUser }>("/auth/me", { signal: controller.signal })
       .then(result => {
         if (active) setUser(result.user);
       })
-      .catch(() => {
-        if (active) setUser(null);
+      .catch(error => {
+        if (!active) return;
+        setUser(null);
+        if (error instanceof DOMException && error.name === "AbortError") {
+          setAuthNotice("La vérification de session prend trop longtemps. Tu peux te connecter normalement.");
+        }
       })
       .finally(() => {
+        window.clearTimeout(timeout);
         if (active) setIsLoading(false);
       });
 
     return () => {
       active = false;
+      window.clearTimeout(timeout);
+      controller.abort();
     };
   }, []);
 
@@ -67,11 +78,13 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     user,
     currentUser: user?.displayName ?? null,
     isLoading,
+    authNotice,
     async login(email, password) {
       const result = await apiRequest<{ user: AccountUser }>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
+      setAuthNotice("");
       setUser(result.user);
     },
     async register(displayName, email, password) {
@@ -79,13 +92,14 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         method: "POST",
         body: JSON.stringify({ displayName, email, password }),
       });
+      setAuthNotice("");
       setUser(result.user);
     },
     async logout() {
       await apiRequest<void>("/auth/logout", { method: "POST" });
       setUser(null);
     },
-  }), [user, isLoading]);
+  }), [user, isLoading, authNotice]);
 
   return (
     <UserContext.Provider value={value}>

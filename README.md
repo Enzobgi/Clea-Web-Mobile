@@ -67,6 +67,9 @@ Les nouvelles données métier restent dans le document JSON utilisateur:
 - `plannedCheckIns`;
 - `careAppointments`;
 - champs enrichis du journal de consommation.
+- état de synchronisation visible côté interface, avec reprise après reconnexion.
+- plans de réduction progressifs rattachés aux suivis par produit.
+- préférences de notifications discrètes, heures silencieuses et rappels reportés.
 
 La réinitialisation de mot de passe dispose des tables et endpoints, mais l'envoi réel d'email reste à brancher sur un fournisseur dédié avant usage public complet.
 
@@ -95,4 +98,4 @@ Les parcours sont définis dans `artifacts/cleanpath/src/content/programs.ts`. U
 
 ## PWA
 
-Le manifest et le service worker rendent l'application installable. Le shell, les pages déjà consultées et les outils essentiels peuvent rester disponibles hors connexion. La synchronisation distante reprend lorsque la connexion revient.
+Le manifest et le service worker rendent l'application installable. Le shell, `/urgence`, `/sos`, `/plan-securite` et `/contacts` sont prévus parmi les ressources essentielles. La synchronisation distante indique les états `chargement`, `en attente`, `hors ligne`, `erreur` ou `à jour`, et reprend lorsque la connexion revient.

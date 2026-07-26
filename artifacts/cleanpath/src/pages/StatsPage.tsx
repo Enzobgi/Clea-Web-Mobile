@@ -327,19 +327,24 @@ export default function StatsPage() {
           </CardHeader>
           <CardContent>
             {hasEmotionalData ? (
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={trendData} margin={{ top: 5, right: 8, left: -22, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={5} />
-                  <YAxis domain={[1, 10]} tick={{ fontSize: 10 }} />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Line type="monotone" dataKey="humeur" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={false} connectNulls name="Humeur" />
-                  <Line type="monotone" dataKey="sommeil" stroke="hsl(var(--chart-4))" strokeWidth={2} dot={false} connectNulls name="Sommeil" />
-                  <Line type="monotone" dataKey="energie" stroke="hsl(var(--accent))" strokeWidth={2} dot={false} connectNulls name="Énergie" />
-                  <Line type="monotone" dataKey="anxiete" stroke="hsl(var(--secondary))" strokeWidth={2} dot={false} connectNulls name="Anxiété" />
-                </LineChart>
-              </ResponsiveContainer>
+              <>
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={trendData} margin={{ top: 5, right: 8, left: -22, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={5} />
+                    <YAxis domain={[1, 10]} tick={{ fontSize: 10 }} />
+                    <Tooltip contentStyle={tooltipStyle} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Line type="monotone" dataKey="humeur" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={false} connectNulls name="Humeur" />
+                    <Line type="monotone" dataKey="sommeil" stroke="hsl(var(--chart-4))" strokeWidth={2} dot={false} connectNulls name="Sommeil" />
+                    <Line type="monotone" dataKey="energie" stroke="hsl(var(--accent))" strokeWidth={2} dot={false} connectNulls name="Énergie" />
+                    <Line type="monotone" dataKey="anxiete" stroke="hsl(var(--secondary))" strokeWidth={2} dot={false} connectNulls name="Anxiété" />
+                  </LineChart>
+                </ResponsiveContainer>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Description du graphique : {summaryItems[3]} Humeur moyenne {formatScore(moodAverage)}, sommeil {formatScore(sleepAverage)}, énergie {formatScore(energyAverage)}, anxiété {formatScore(anxietyAverage)}.
+                </p>
+              </>
             ) : (
               <p className="py-16 text-center text-sm text-muted-foreground">
                 Remplis le journal émotionnel pour faire apparaître les tendances.
@@ -431,21 +436,26 @@ export default function StatsPage() {
             </CardHeader>
             <CardContent>
               {seasonalData.some(season => season.rate !== null) ? (
-                <ResponsiveContainer width="100%" height={230}>
-                  <BarChart data={seasonalData}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                    <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
-                    <Tooltip
-                      contentStyle={tooltipStyle}
-                      formatter={(value, _name, item) => [
-                        `${value ?? 0} % (${item.payload.consumptionDays}/${item.payload.trackedDays} jours)`,
-                        "Jours avec consommation",
-                      ]}
-                    />
-                    <Bar dataKey="rate" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <>
+                  <ResponsiveContainer width="100%" height={230}>
+                    <BarChart data={seasonalData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
+                      <Tooltip
+                        contentStyle={tooltipStyle}
+                        formatter={(value, _name, item) => [
+                          `${value ?? 0} % (${item.payload.consumptionDays}/${item.payload.trackedDays} jours)`,
+                          "Jours avec consommation",
+                        ]}
+                      />
+                      <Bar dataKey="rate" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Description du graphique : {seasonalObservation}
+                  </p>
+                </>
               ) : (
                 <p className="py-14 text-center text-sm text-muted-foreground">
                   Renseigne des jours dans le calendrier pour commencer l'analyse saisonnière.
@@ -559,21 +569,26 @@ function FrequencyChart({
       </CardHeader>
       <CardContent>
         {data.length > 0 ? (
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={data} layout="vertical" margin={{ top: 0, right: 12, left: 12, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
-              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
-              <YAxis
-                type="category"
-                dataKey="name"
-                tick={{ fontSize: 11 }}
-                width={110}
-                tickFormatter={value => value.length > 17 ? `${value.slice(0, 17)}…` : value}
-              />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="count" fill={color} name="Occurrences" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={data} layout="vertical" margin={{ top: 0, right: 12, left: 12, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  tick={{ fontSize: 11 }}
+                  width={110}
+                  tickFormatter={value => value.length > 17 ? `${value.slice(0, 17)}…` : value}
+                />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Bar dataKey="count" fill={color} name="Occurrences" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Description du graphique : l'élément le plus fréquent est « {data[0].name} » avec {data[0].count} occurrence{data[0].count > 1 ? "s" : ""}.
+            </p>
+          </>
         ) : (
           <p className="py-16 text-center text-sm text-muted-foreground">{emptyText}</p>
         )}
