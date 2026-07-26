@@ -67,6 +67,7 @@ export default function ConsumptionJournalPage() {
   const [safeNow, setSafeNow] = useState<boolean | null>(null);
   const [worryingSymptoms, setWorryingSymptoms] = useState(false);
   const [checkInPlanned, setCheckInPlanned] = useState(false);
+  const [substanceFilter, setSubstanceFilter] = useState("all");
 
   const openNew = (type: "consommation" | "envie_seulement") => {
     setEditingId(null);
@@ -118,6 +119,18 @@ export default function ConsumptionJournalPage() {
 
   const selectedSubstance = substanceTrackings.find(substance => substance.id === form.substanceId);
   const activeSubstances = substanceTrackings.filter(substance => !substance.archivedAt);
+  const filteredConsumptions = consumptions.filter(entry => {
+    if (substanceFilter === "all") return true;
+    if (substanceFilter === "manual") return !entry.substanceId;
+    return entry.substanceId === substanceFilter
+      || substanceTrackings.find(substance => substance.id === substanceFilter)?.name.toLowerCase() === entry.substance.toLowerCase();
+  });
+  const filteredConsumptionEvents = filteredConsumptions.filter(entry => entry.type === "consommation");
+  const filteredCravings = filteredConsumptions.filter(entry => entry.type === "envie_seulement");
+  const filteredQuantity = filteredConsumptionEvents.reduce((sum, entry) => {
+    const value = Number.parseFloat(String(entry.quantity).replace(",", "."));
+    return Number.isFinite(value) ? sum + value : sum;
+  }, 0);
 
   const syncDayStatus = (entries: ConsumptionEntry[], date: string) => {
     const sameDateHasConsumption = entries.some(entry => entry.date === date && entry.type === "consommation");
@@ -173,16 +186,41 @@ export default function ConsumptionJournalPage() {
         </Button>
       </div>
 
+      <Card>
+        <CardContent className="space-y-4 p-4">
+          <div className="space-y-1.5">
+            <Label>Filtrer par produit</Label>
+            <Select value={substanceFilter} onValueChange={setSubstanceFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Tous les produits" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les produits</SelectItem>
+                {activeSubstances.map(substance => (
+                  <SelectItem key={substance.id} value={substance.id}>{substance.name}</SelectItem>
+                ))}
+                <SelectItem value="manual">Saisies libres non rattachées</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-sm">
+            <FilterMetric label="Consommations" value={String(filteredConsumptionEvents.length)} />
+            <FilterMetric label="Envies surmontées" value={String(filteredCravings.length)} />
+            <FilterMetric label="Quantité" value={filteredQuantity > 0 ? formatQuantity(filteredQuantity) : "—"} />
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="space-y-4">
-        {consumptions.length === 0 ? (
+        {filteredConsumptions.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-muted-foreground">
-              <p>Aucune entrée pour le moment.</p>
-              <p className="text-sm mt-2">Chaque entrée, qu'elle soit difficile ou victorieuse, est précieuse.</p>
+              <p>Aucune entrée pour ce filtre.</p>
+              <p className="text-sm mt-2">Tu peux changer de produit ou ajouter une nouvelle entrée.</p>
             </CardContent>
           </Card>
         ) : (
-          consumptions
+          filteredConsumptions
             .sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time))
             .map(entry => (
               <Card key={entry.id} className={entry.type === "envie_seulement" ? "border-primary/30 bg-primary/5" : ""}>
@@ -500,4 +538,17 @@ function SupportBlock({ label, text }: { label: string; text: string }) {
       <p className="mt-1 whitespace-pre-wrap">{text}</p>
     </div>
   );
+}
+
+function FilterMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-muted/35 p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 font-medium">{value}</p>
+    </div>
+  );
+}
+
+function formatQuantity(value: number) {
+  return value.toFixed(value % 1 === 0 ? 0 : 1).replace(".", ",");
 }

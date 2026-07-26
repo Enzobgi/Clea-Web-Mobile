@@ -11,6 +11,7 @@ import {
   MessageCircle,
   MoreHorizontal,
   PenTool,
+  ListChecks,
   Route,
   Settings,
   ShieldAlert,
@@ -61,6 +62,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <NavItem href="/plan-securite" icon={ShieldAlert} label="Plan de protection" active={location === "/plan-securite"} />
           <NavItem href="/contacts" icon={Users} label="Contacts" active={location === "/contacts"} />
           <NavItem href="/objectifs" icon={Target} label="Objectifs" active={location === "/objectifs"} />
+          <NavItem href="/plan-reduction" icon={ListChecks} label="Plan de réduction" active={location === "/plan-reduction"} />
           <NavItem href="/boite-a-outils" icon={PenTool} label="Boîte à outils" active={location === "/boite-a-outils"} />
           <NavItem href="/profil" icon={UserRound} label="Profil" active={location === "/profil"} />
           <NavItem href="/parametres" icon={Settings} label="Paramètres" active={location === "/parametres"} />
@@ -128,6 +130,7 @@ function MoreMenu({ logout }: { logout: () => Promise<void> }) {
         <Link href="/plan-securite"><DropdownMenuItem><ShieldAlert className="mr-2 h-4 w-4" />Plan de protection</DropdownMenuItem></Link>
         <Link href="/contacts"><DropdownMenuItem><Users className="mr-2 h-4 w-4" />Contacts</DropdownMenuItem></Link>
         <Link href="/objectifs"><DropdownMenuItem><Target className="mr-2 h-4 w-4" />Objectifs</DropdownMenuItem></Link>
+        <Link href="/plan-reduction"><DropdownMenuItem><ListChecks className="mr-2 h-4 w-4" />Plan de réduction</DropdownMenuItem></Link>
         <Link href="/boite-a-outils"><DropdownMenuItem><PenTool className="mr-2 h-4 w-4" />Boîte à outils</DropdownMenuItem></Link>
         <Link href="/profil"><DropdownMenuItem><UserRound className="mr-2 h-4 w-4" />Profil</DropdownMenuItem></Link>
         <Link href="/parametres"><DropdownMenuItem><Settings className="mr-2 h-4 w-4" />Paramètres</DropdownMenuItem></Link>

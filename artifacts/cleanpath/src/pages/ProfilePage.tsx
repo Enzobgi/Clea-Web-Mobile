@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { CalendarClock, Database, Settings, ShieldCheck, Target, Users } from "lucide-react";
+import { CalendarClock, Database, ListChecks, Settings, ShieldCheck, Target, Users } from "lucide-react";
 import { useAppStore, type CareAppointment } from "@/store/useAppStore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -66,6 +66,7 @@ export default function ProfilePage() {
       </Card>
       <div className="grid gap-3 sm:grid-cols-2">
         <ProfileLink href="/objectifs" icon={Target} title="Objectifs" />
+        <ProfileLink href="/plan-reduction" icon={ListChecks} title="Plan de réduction" />
         <ProfileLink href="/contacts" icon={Users} title="Cercle de confiance" />
         <ProfileLink href="/plan-securite" icon={ShieldCheck} title="Plan de protection" />
         <ProfileLink href="/parametres" icon={Settings} title="Paramètres et verrouillage" />

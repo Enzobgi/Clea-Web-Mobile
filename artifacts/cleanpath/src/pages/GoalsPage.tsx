@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useAppStore, Goal, type SubstanceTracking } from "@/store/useAppStore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Archive, Check, Plus } from "lucide-react";
+import { Archive, Check, ListChecks, Plus } from "lucide-react";
 import { getCurrentAbstinentStreak } from "@/lib/abstinence";
 
 const PRESET_DAYS = [1, 3, 7, 14, 30, 60, 90];
@@ -128,10 +129,18 @@ export default function GoalsPage() {
             <h2 className="text-lg font-medium">Suivis par produit</h2>
             <p className="text-sm text-muted-foreground">Chaque suivi peut avoir son propre objectif.</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setTrackingOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Ajouter
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/plan-reduction">
+                <ListChecks className="mr-2 h-4 w-4" />
+                Plan
+              </Link>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setTrackingOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Ajouter
+            </Button>
+          </div>
         </div>
 
         {activeTrackings.length === 0 ? (
@@ -151,14 +160,12 @@ export default function GoalsPage() {
                 const value = Number.parseFloat(String(entry.quantity).replace(",", "."));
                 return Number.isFinite(value) ? sum + value : sum;
               }, 0);
+              const last7Quantity = quantityBetween(entries, daysAgo(6), new Date().toISOString().slice(0, 10));
+              const previous7Quantity = quantityBetween(entries, daysAgo(13), daysAgo(7));
+              const productStreak = currentProductStreak(tracking, entries);
+              const weeklyEvolution = formatEvolution(last7Quantity, previous7Quantity, tracking.unit);
               const plan = tracking.reductionPlan ?? emptyTracking().reductionPlan!;
               const plannedNow = plannedAmountForToday(tracking);
-              const last7Quantity = entries
-                .filter(entry => entry.date >= daysAgo(6))
-                .reduce((sum, entry) => {
-                  const value = Number.parseFloat(String(entry.quantity).replace(",", "."));
-                  return Number.isFinite(value) ? sum + value : sum;
-                }, 0);
               const savings = Number.parseFloat(plan.optionalSavingsPerUnit.replace(",", "."));
               const estimatedSavings = Number.isFinite(savings) && plan.startAmount
                 ? Math.max(0, (Number(plan.startAmount.replace(",", ".")) * 7 - last7Quantity) * savings)
@@ -177,10 +184,13 @@ export default function GoalsPage() {
                         <Archive className="h-4 w-4" />
                       </Button>
                     </div>
-                    <div className="grid gap-2 sm:grid-cols-3 text-sm">
+                    <div className="grid gap-2 sm:grid-cols-4 text-sm">
                       <Info label="Événements" value={String(entries.length)} />
                       <Info label="Quantité totale" value={totalQuantity > 0 ? `${formatNumber(totalQuantity)} ${tracking.unit}` : "Non chiffrée"} />
                       <Info label="Plafond" value={tracking.dailyLimit ? `${tracking.dailyLimit} ${tracking.unit}/jour` : tracking.weeklyLimit ? `${tracking.weeklyLimit} ${tracking.unit}/semaine` : "Non défini"} />
+                      <Info label="Série produit" value={`${productStreak} j`} />
+                      <Info label="7 derniers jours" value={last7Quantity > 0 ? `${formatNumber(last7Quantity)} ${tracking.unit}` : "Aucune quantité"} />
+                      <Info label="Évolution" value={weeklyEvolution} />
                     </div>
                     {tracking.objective === "reduction" && (
                       <div className="space-y-3 rounded-md bg-muted/35 p-3">
@@ -413,10 +423,42 @@ function formatNumber(value: number) {
   return value.toFixed(value % 1 === 0 ? 0 : 1).replace(".", ",");
 }
 
+function parseQuantity(quantity: string) {
+  const value = Number.parseFloat(String(quantity).replace(",", "."));
+  return Number.isFinite(value) ? value : 0;
+}
+
 function daysAgo(days: number) {
   const date = new Date();
   date.setDate(date.getDate() - days);
   return date.toISOString().slice(0, 10);
+}
+
+function quantityBetween(entries: Array<{ date: string; quantity: string }>, startDate: string, endDate: string) {
+  return entries
+    .filter(entry => entry.date >= startDate && entry.date <= endDate)
+    .reduce((sum, entry) => sum + parseQuantity(entry.quantity), 0);
+}
+
+function currentProductStreak(tracking: SubstanceTracking, entries: Array<{ date: string }>) {
+  const today = new Date();
+  const start = new Date(`${tracking.startDate}T00:00:00`);
+  const latestConsumption = entries
+    .map(entry => new Date(`${entry.date}T00:00:00`))
+    .filter(date => date <= today)
+    .sort((a, b) => b.getTime() - a.getTime())[0];
+  const reference = latestConsumption && latestConsumption >= start ? latestConsumption : start;
+  const elapsed = Math.floor((today.getTime() - reference.getTime()) / 86_400_000);
+  return Math.max(0, latestConsumption && latestConsumption >= start ? elapsed : elapsed + 1);
+}
+
+function formatEvolution(current: number, previous: number, unit: string) {
+  if (current === 0 && previous === 0) return "Stable sans quantité";
+  const suffix = unit || "unité";
+  if (previous === 0) return `${formatNumber(current)} ${suffix} cette semaine`;
+  const difference = current - previous;
+  if (difference === 0) return "Stable";
+  return `${difference > 0 ? "+" : ""}${formatNumber(difference)} ${suffix}`;
 }
 
 function plannedAmountForToday(tracking: SubstanceTracking) {

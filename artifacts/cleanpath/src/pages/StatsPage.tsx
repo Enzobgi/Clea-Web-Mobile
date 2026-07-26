@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { useAppStore, type EmotionalEntry } from "@/store/useAppStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { eachDayOfInterval, endOfMonth, format, startOfMonth, subDays } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Activity, Brain, CalendarDays, Heart, Leaf, Moon, ShieldCheck, Snowflake, Sun, TrendingUp } from "lucide-react";
@@ -115,26 +118,35 @@ function ScoreProgress({
 }
 
 export default function StatsPage() {
-  const { dayEntries, consumptions, cravings, emotions } = useAppStore();
+  const { dayEntries, consumptions, cravings, emotions, substanceTrackings } = useAppStore();
+  const [substanceFilter, setSubstanceFilter] = useState("all");
+  const activeSubstances = substanceTrackings.filter(substance => !substance.archivedAt);
+  const filteredConsumptions = consumptions.filter(entry => {
+    if (substanceFilter === "all") return true;
+    if (substanceFilter === "manual") return !entry.substanceId;
+    return entry.substanceId === substanceFilter
+      || substanceTrackings.find(substance => substance.id === substanceFilter)?.name.toLowerCase() === entry.substance.toLowerCase();
+  });
+  const selectedSubstance = substanceTrackings.find(substance => substance.id === substanceFilter);
   const now = new Date();
   const last30Start = subDays(now, 29);
   const previous30Start = subDays(now, 59);
 
-  const currentStreak = getCurrentAbstinentStreak(dayEntries, consumptions);
-  const bestStreak = getBestAbstinentStreak(dayEntries, consumptions);
-  const totalAbstinent = getTotalAbstinentDays(dayEntries, consumptions);
+  const currentStreak = getCurrentAbstinentStreak(dayEntries, filteredConsumptions);
+  const bestStreak = getBestAbstinentStreak(dayEntries, filteredConsumptions);
+  const totalAbstinent = getTotalAbstinentDays(dayEntries, filteredConsumptions);
 
-  const markedDates = getMarkedDates(dayEntries, consumptions);
+  const markedDates = getMarkedDates(dayEntries, filteredConsumptions);
   const comparableDays = markedDates.filter(date => {
-    const status = getDayStatus(date, dayEntries, consumptions);
+    const status = getDayStatus(date, dayEntries, filteredConsumptions);
     return isConsumptionFreeStatus(status) || status === "consommation";
   });
   const abstinenceRate = comparableDays.length === 0
     ? null
     : Math.round((totalAbstinent / comparableDays.length) * 100);
 
-  const consumptionEntries = consumptions.filter(entry => entry.type === "consommation");
-  const cravingOnlyEntries = consumptions.filter(entry => entry.type === "envie_seulement");
+  const consumptionEntries = filteredConsumptions.filter(entry => entry.type === "consommation");
+  const cravingOnlyEntries = filteredConsumptions.filter(entry => entry.type === "envie_seulement");
   const overcomeCravings = cravings.filter(entry => entry.outcome === "tenu_bon").length + cravingOnlyEntries.length;
   const consumedCravings = cravings.filter(entry => entry.outcome === "consomme").length + consumptionEntries.length;
   const knownCravingOutcomes = overcomeCravings + consumedCravings;
@@ -190,7 +202,7 @@ export default function StatsPage() {
 
   const countBy = (field: "trigger" | "emotionBefore") => {
     const counts: Record<string, number> = {};
-    consumptions.forEach(entry => {
+    filteredConsumptions.forEach(entry => {
       const value = entry[field]?.trim();
       if (value) counts[value] = (counts[value] ?? 0) + 1;
     });
@@ -208,7 +220,7 @@ export default function StatsPage() {
   const seasonalData = SEASONS.map(season => {
     const trackedDates = comparableDays.filter(date => getSeason(date) === season.id);
     const consumptionDates = trackedDates.filter(date =>
-      getDayStatus(date, dayEntries, consumptions) === "consommation"
+      getDayStatus(date, dayEntries, filteredConsumptions) === "consommation"
     );
     return {
       ...season,
@@ -275,6 +287,33 @@ export default function StatsPage() {
           Une vue complète de ton parcours, utile pour toi et pour préparer un échange avec un professionnel.
         </p>
       </header>
+
+      <Card>
+        <CardContent className="grid gap-4 p-4 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div className="space-y-1.5">
+            <Label>Filtrer les statistiques par produit</Label>
+            <Select value={substanceFilter} onValueChange={setSubstanceFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Tous les produits" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les produits</SelectItem>
+                {activeSubstances.map(substance => (
+                  <SelectItem key={substance.id} value={substance.id}>{substance.name}</SelectItem>
+                ))}
+                <SelectItem value="manual">Saisies libres non rattachées</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {substanceFilter === "all"
+              ? "Vue globale"
+              : selectedSubstance
+                ? `Vue centrée sur ${selectedSubstance.name}`
+                : "Vue des saisies libres"}
+          </p>
+        </CardContent>
+      </Card>
 
       <section className="space-y-3">
         <h2 className="text-lg font-medium">Parcours d'abstinence</h2>

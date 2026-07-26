@@ -234,7 +234,7 @@ function buildReminders({
       id: `difficult-${tracking.id}`,
       title: "Période sensible à anticiper",
       text: `Pour ${tracking.name}, relis tes stratégies de remplacement avant une période difficile.`,
-      href: "/objectifs",
+      href: "/plan-reduction",
     }));
 
   return reminders.slice(0, 4);

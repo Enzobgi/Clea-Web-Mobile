@@ -29,6 +29,7 @@ import ProgramsPage from "@/pages/ProgramsPage";
 import ChatPage from "@/pages/ChatPage";
 import ProfilePage from "@/pages/ProfilePage";
 import LegalPage from "@/pages/LegalPage";
+import ReductionPlanPage from "@/pages/ReductionPlanPage";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,7 @@ function Router() {
         <Route path="/plan-securite" component={SafetyPlanPage} />
         <Route path="/contacts" component={ContactsPage} />
         <Route path="/objectifs" component={GoalsPage} />
+        <Route path="/plan-reduction" component={ReductionPlanPage} />
         <Route path="/boite-a-outils" component={ToolboxPage} />
         <Route path="/parametres" component={SettingsPage} />
         <Route component={NotFound} />
