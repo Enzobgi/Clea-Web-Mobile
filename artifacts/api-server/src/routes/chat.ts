@@ -203,6 +203,10 @@ function seasonFor(dateStr: string): "hiver" | "printemps" | "été" | "automne"
   return "automne";
 }
 
+function isConsumptionFreeStatus(status: string | null | undefined) {
+  return status === "abstinent" || status === "envie_forte";
+}
+
 function buildStatsContext(data: Record<string, unknown>): string | null {
   const settings = recordValue(data.settings);
   if (settings.chatStatsEnabled === false) return null;
@@ -225,15 +229,15 @@ function buildStatsContext(data: Record<string, unknown>): string | null {
   });
 
   const comparableDates = [...statuses.entries()]
-    .filter(([, status]) => status === "abstinent" || status === "consommation")
+    .filter(([, status]) => isConsumptionFreeStatus(status) || status === "consommation")
     .map(([date]) => date)
     .sort();
-  const abstinentDates = comparableDates.filter(date => statuses.get(date) === "abstinent");
+  const abstinentDates = comparableDates.filter(date => isConsumptionFreeStatus(statuses.get(date)));
   const consumptionDates = comparableDates.filter(date => statuses.get(date) === "consommation");
   const today = todayInBrussels();
 
   let currentStreak = 0;
-  while (currentStreak < 3650 && statuses.get(dayOffset(today, -currentStreak)) === "abstinent") {
+  while (currentStreak < 3650 && isConsumptionFreeStatus(statuses.get(dayOffset(today, -currentStreak)))) {
     currentStreak++;
   }
 
@@ -294,7 +298,8 @@ function buildStatsContext(data: Record<string, unknown>): string | null {
   }>((groups, entry) => {
     const date = dateValue(entry.date);
     const status = date ? statuses.get(date) : null;
-    if (status === "abstinent" || status === "consommation") groups[status].push(entry);
+    if (isConsumptionFreeStatus(status)) groups.abstinent.push(entry);
+    else if (status === "consommation") groups.consommation.push(entry);
     return groups;
   }, { abstinent: [], consommation: [] });
   const crossMetricLabels: Array<{

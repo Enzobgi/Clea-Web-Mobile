@@ -12,6 +12,7 @@ import {
   getMarkedDates,
   getStatusStreaks,
   getTotalAbstinentDays,
+  isConsumptionFreeStatus,
   upsertDayEntriesForDates,
 } from "@/lib/abstinence";
 import {
@@ -44,7 +45,7 @@ export default function CalendarPage() {
   const statusStreaks = getStatusStreaks(dayEntries, consumptions);
   const recordedDays = getMarkedDates(dayEntries, consumptions)
     .map(date => ({ date, status: getDayStatus(date, dayEntries, consumptions) }))
-    .filter(day => day.status === "abstinent" || day.status === "consommation")
+    .filter(day => isConsumptionFreeStatus(day.status) || day.status === "consommation")
     .sort((a, b) => b.date.localeCompare(a.date));
   const pendingRangeLabel = `${pendingRange.length} jour${pendingRange.length > 1 ? "s" : ""} ${pendingRange.length > 1 ? "seront ajoutés" : "sera ajouté"} au total.`;
   
@@ -274,8 +275,12 @@ export default function CalendarPage() {
                 <span className="text-sm capitalize">
                   {format(new Date(`${day.date}T00:00:00`), "EEEE d MMMM yyyy", { locale: fr })}
                 </span>
-                <span className={`text-xs font-medium ${day.status === "abstinent" ? "text-primary" : "text-destructive"}`}>
-                  {day.status === "abstinent" ? "Sans consommation" : "Consommation"}
+                <span className={`text-xs font-medium ${isConsumptionFreeStatus(day.status) ? "text-primary" : "text-destructive"}`}>
+                  {day.status === "envie_forte"
+                    ? "Envie surmontée - sans consommation"
+                    : day.status === "abstinent"
+                      ? "Sans consommation"
+                      : "Consommation"}
                 </span>
               </div>
             ))}

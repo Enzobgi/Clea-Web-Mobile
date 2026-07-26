@@ -32,9 +32,13 @@ export function getMarkedDates(dayEntries: DayEntry[], consumptions: Consumption
   ])).sort();
 }
 
+export function isConsumptionFreeStatus(status: DayStatus) {
+  return status === "abstinent" || status === "envie_forte";
+}
+
 export function getAbstinentDates(dayEntries: DayEntry[], consumptions: ConsumptionEntry[]) {
   return getMarkedDates(dayEntries, consumptions).filter(dateStr =>
-    getDayStatus(dateStr, dayEntries, consumptions) === "abstinent"
+    isConsumptionFreeStatus(getDayStatus(dateStr, dayEntries, consumptions))
   );
 }
 
@@ -53,7 +57,7 @@ export function getCurrentAbstinentStreak(
 
   while (cursor < 3650) {
     const dateStr = format(subDays(start, cursor), "yyyy-MM-dd");
-    if (getDayStatus(dateStr, dayEntries, consumptions) !== "abstinent") break;
+    if (!isConsumptionFreeStatus(getDayStatus(dateStr, dayEntries, consumptions))) break;
     streak++;
     cursor++;
   }
@@ -93,8 +97,13 @@ export function getStatusStreaks(dayEntries: DayEntry[], consumptions: Consumpti
   let current: StatusStreak | null = null;
 
   for (const dateStr of dates) {
-    const status = getDayStatus(dateStr, dayEntries, consumptions);
-    if (status !== "abstinent" && status !== "consommation") {
+    const dayStatus = getDayStatus(dateStr, dayEntries, consumptions);
+    const status = isConsumptionFreeStatus(dayStatus)
+      ? "abstinent"
+      : dayStatus === "consommation"
+        ? "consommation"
+        : null;
+    if (!status) {
       current = null;
       continue;
     }

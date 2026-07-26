@@ -9,6 +9,7 @@ import {
   getDayStatus,
   getMarkedDates,
   getTotalAbstinentDays,
+  isConsumptionFreeStatus,
 } from "@/lib/abstinence";
 import {
   Bar,
@@ -126,7 +127,7 @@ export default function StatsPage() {
   const markedDates = getMarkedDates(dayEntries, consumptions);
   const comparableDays = markedDates.filter(date => {
     const status = getDayStatus(date, dayEntries, consumptions);
-    return status === "abstinent" || status === "consommation";
+    return isConsumptionFreeStatus(status) || status === "consommation";
   });
   const abstinenceRate = comparableDays.length === 0
     ? null
